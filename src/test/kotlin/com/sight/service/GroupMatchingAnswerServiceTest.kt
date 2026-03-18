@@ -18,7 +18,6 @@ import com.sight.repository.GroupMatchingOptionRepository
 import com.sight.repository.GroupMatchingRepository
 import com.sight.repository.MatchedGroupRepository
 import com.sight.repository.MemberRepository
-import com.sight.repository.ProvisionalGroupRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -40,7 +39,6 @@ class GroupMatchingAnswerServiceTest {
     private val optionRepository = mock<GroupMatchingOptionRepository>()
     private val groupMatchingRepository = mock<GroupMatchingRepository>()
     private val memberRepository = mock<MemberRepository>()
-    private val provisionalGroupRepository = mock<ProvisionalGroupRepository>()
 
     private val service =
         GroupMatchingAnswerService(
@@ -50,7 +48,6 @@ class GroupMatchingAnswerServiceTest {
             optionRepository,
             groupMatchingRepository,
             memberRepository,
-            provisionalGroupRepository,
         )
 
     private val userId = 1L
@@ -329,7 +326,7 @@ class GroupMatchingAnswerServiceTest {
         val pageable = PageRequest.of(0, 20)
         val page = PageImpl(listOf(answer), pageable, 1L)
 
-        given(answerRepository.findAnswersWithFilters(groupMatchingId, null, null, null, pageable))
+        given(answerRepository.findAnswersWithFilters(groupMatchingId, null, null, pageable))
             .willReturn(page)
         given(memberRepository.findAllById(listOf(answerUserId)))
             .willReturn(listOf(member))
@@ -377,7 +374,7 @@ class GroupMatchingAnswerServiceTest {
         val pageable = PageRequest.of(0, 20)
         val page = PageImpl(listOf(answer), pageable, 1L)
 
-        given(answerRepository.findAnswersWithFilters(groupMatchingId, null, null, null, pageable))
+        given(answerRepository.findAnswersWithFilters(groupMatchingId, null, null, pageable))
             .willReturn(page)
         given(memberRepository.findAllById(listOf(answerUserId)))
             .willReturn(emptyList())

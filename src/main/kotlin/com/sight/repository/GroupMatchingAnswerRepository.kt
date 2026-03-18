@@ -5,7 +5,6 @@ import com.sight.domain.groupmatching.GroupMatchingType
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
@@ -29,10 +28,6 @@ interface GroupMatchingAnswerRepository : JpaRepository<GroupMatchingAnswer, Str
         WHERE a.groupMatchingId = :groupMatchingId
         AND (:groupType IS NULL OR a.groupType = :groupType)
         AND (:optionId IS NULL OR ao.optionId = :optionId)
-        AND (
-            :provisionalGroupId IS NULL
-            OR a.provisionalGroupId = :provisionalGroupId
-        )
         ORDER BY a.createdAt DESC
         """,
     )
@@ -40,7 +35,6 @@ interface GroupMatchingAnswerRepository : JpaRepository<GroupMatchingAnswer, Str
         @Param("groupMatchingId") groupMatchingId: String,
         @Param("groupType") groupType: GroupMatchingType?,
         @Param("optionId") optionId: String?,
-        @Param("provisionalGroupId") provisionalGroupId: String?,
         pageable: Pageable,
     ): Page<GroupMatchingAnswer>
 
@@ -48,12 +42,4 @@ interface GroupMatchingAnswerRepository : JpaRepository<GroupMatchingAnswer, Str
         groupMatchingId: String,
         userId: Long,
     ): GroupMatchingAnswer?
-
-    fun countByProvisionalGroupId(provisionalGroupId: String): Long
-
-    @Modifying
-    @Query("UPDATE GroupMatchingAnswer a SET a.provisionalGroupId = NULL WHERE a.provisionalGroupId = :provisionalGroupId")
-    fun updateProvisionalGroupIdToNullByProvisionalGroupId(
-        @Param("provisionalGroupId") provisionalGroupId: String,
-    )
 }
