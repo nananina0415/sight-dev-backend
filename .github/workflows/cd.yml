@@ -11,45 +11,31 @@ on:
       - "build.gradle.kts"
       - "Dockerfile.Build"
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/sight-dev-backend
-
 jobs:
-  build-and-push-image:
+  build-and-deploy:
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
-      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Docker image
+        run: docker build -f Dockerfile.Build -t sight-dev-backend:latest .
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=sha,format=long
+      - name: Save Docker image
+        run: docker save sight-dev-backend:latest | gzip > sight-dev-backend.tar.gz
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+      - name: Copy image and compose file to dev server
+        uses: appleboy/scp-action@v0.1.7
         with:
-          context: .
-          file: Dockerfile.Build
-          platforms: "linux/arm64"
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: sight-dev-backend.tar.gz,docker-compose.dev.yaml
+          target: /home/nananina/
+          overwrite: true
 
       - name: Deploy to dev server
         uses: appleboy/ssh-action@v1
@@ -58,4 +44,6 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: /home/github-deploy/deploy.sh
+          script: |
+            docker load < /home/nananina/sight-dev-backend.tar.gz
+            cd /home/nananina && docker compose -f docker-compose.dev.yaml up -d --no-deps backend
