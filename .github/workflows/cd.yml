@@ -46,4 +46,4 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             docker load < /home/nananina/sight-dev-backend.tar.gz
-            cd /home/nananina && docker compose -f docker-compose.dev.yaml up -d --no-deps backend
+            cd /home/nananina && docker compose -f docker-compose.dev.yaml up -d
