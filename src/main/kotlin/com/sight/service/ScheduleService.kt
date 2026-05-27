@@ -11,6 +11,7 @@ import com.sight.domain.schedule.Schedule
 import com.sight.domain.schedule.ScheduleCategory
 import com.sight.domain.schedule.ScheduleMemberApply
 import com.sight.domain.schedule.ScheduleState
+import com.sight.repository.MemberRepository
 import com.sight.repository.ScheduleMemberApplyRepository
 import com.sight.repository.ScheduleRepository
 import com.sight.service.dto.CheckScheduleAttendanceResult
@@ -28,6 +29,7 @@ import kotlin.random.Random
 class ScheduleService(
     private val scheduleRepository: ScheduleRepository,
     private val scheduleMemberApplyRepository: ScheduleMemberApplyRepository,
+    private val memberRepository: MemberRepository,
     private val pointService: PointService,
 ) {
     @Transactional(readOnly = true)
@@ -123,6 +125,64 @@ class ScheduleService(
             expointGranted = schedule.expoint,
             createdAt = attendance.createdAt,
         )
+    }
+
+    @Transactional
+    fun addScheduleAttendances(
+        requester: Requester,
+        scheduleId: Long,
+        userIds: List<Long>,
+    ) {
+        if (requester.role != UserRole.MANAGER) {
+            throw ForbiddenException("권한이 부족합니다.")
+        }
+        if (userIds.isEmpty()) {
+            throw BadRequestException("출석 처리할 사용자를 선택해 주세요.")
+        }
+        if (userIds.size != userIds.distinct().size) {
+            throw BadRequestException("요청에 중복된 유저 ID가 포함되어 있습니다.")
+        }
+
+        val schedule =
+            scheduleRepository.findActiveById(scheduleId)
+                ?: throw NotFoundException("존재하지 않는 일정입니다.")
+
+        userIds.forEach { userId ->
+            if (!memberRepository.existsById(userId)) {
+                throw NotFoundException("사용자를 찾을 수 없습니다.")
+            }
+        }
+
+        val existingUserIds =
+            scheduleMemberApplyRepository.findByMemberIdInAndScheduleId(
+                memberIds = userIds,
+                scheduleId = scheduleId,
+            ).map { it.memberId }
+
+        if (existingUserIds.isNotEmpty()) {
+            throw ConflictException("이미 출석 처리된 사용자가 포함되어 있습니다.")
+        }
+
+        val now = LocalDateTime.now()
+        val attendances =
+            userIds.map { userId ->
+                ScheduleMemberApply(
+                    memberId = userId,
+                    scheduleId = scheduleId,
+                    attendedAt = now,
+                )
+            }
+        scheduleMemberApplyRepository.saveAll(attendances)
+
+        if (schedule.expoint > 0) {
+            userIds.forEach { userId ->
+                pointService.givePoint(
+                    targetUserId = userId,
+                    point = schedule.expoint,
+                    message = "${schedule.title} 출석 (관리자 추가)",
+                )
+            }
+        }
     }
 
     @Transactional
