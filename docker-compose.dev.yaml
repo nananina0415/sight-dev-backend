@@ -30,8 +30,6 @@ services:
 
   dev-auth:
     image: dev-auth:latest
-    environment:
-      - AUTH_SERVICE_API_KEY=${AUTH_SERVICE_API_KEY}
     restart: unless-stopped
 
 volumes:

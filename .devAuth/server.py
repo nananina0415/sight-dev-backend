@@ -1,9 +1,8 @@
 from flask import Flask, request, jsonify
-import os
 
 app = Flask(__name__)
 
-API_KEY = os.environ.get("AUTH_SERVICE_API_KEY", "")
+API_KEY = "0000"
 
 USERS = {
     "member":  {"userId": 1},
