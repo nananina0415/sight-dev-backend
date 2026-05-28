@@ -3,12 +3,20 @@ package com.sight.service
 import com.sight.core.auth.Requester
 import com.sight.core.auth.UserRole
 import com.sight.core.exception.BadRequestException
+import com.sight.core.exception.ConflictException
 import com.sight.core.exception.ForbiddenException
 import com.sight.core.exception.NotFoundException
+import com.sight.core.exception.UnauthorizedException
 import com.sight.domain.schedule.Schedule
 import com.sight.domain.schedule.ScheduleCategory
+import com.sight.domain.schedule.ScheduleMemberApply
 import com.sight.domain.schedule.ScheduleState
+import com.sight.repository.MemberRepository
+import com.sight.repository.ScheduleMemberApplyRepository
 import com.sight.repository.ScheduleRepository
+import com.sight.service.dto.CheckScheduleAttendanceResult
+import com.sight.service.dto.ListScheduleAttendancesResult
+import com.sight.service.dto.ScheduleAttendanceItem
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -20,6 +28,9 @@ import kotlin.random.Random
 @Service
 class ScheduleService(
     private val scheduleRepository: ScheduleRepository,
+    private val scheduleMemberApplyRepository: ScheduleMemberApplyRepository,
+    private val memberRepository: MemberRepository,
+    private val pointService: PointService,
 ) {
     @Transactional(readOnly = true)
     fun listSchedules(
@@ -35,15 +46,173 @@ class ScheduleService(
     }
 
     @Transactional(readOnly = true)
-    fun listAttendanceActiveSchedules(limit: Int): List<Schedule> {
-        val pageable = PageRequest.of(0, limit)
-        return scheduleRepository.findAttendanceActive(LocalDateTime.now(), pageable)
+    fun listActiveSchedules(): List<Schedule> {
+        val now = LocalDateTime.now()
+        val pageable = PageRequest.of(0, DEFAULT_ACTIVE_SCHEDULE_LIMIT)
+        return scheduleRepository.findAttendanceActive(now, pageable)
+            .filter { it.isAttendanceActive(now) }
     }
 
     @Transactional(readOnly = true)
     fun getScheduleById(id: Long): Schedule {
         return scheduleRepository.findActiveById(id)
             ?: throw NotFoundException("존재하지 않는 일정입니다.")
+    }
+
+    @Transactional(readOnly = true)
+    fun listScheduleAttendances(scheduleId: Long): ListScheduleAttendancesResult {
+        if (scheduleRepository.findActiveById(scheduleId) == null) {
+            throw NotFoundException("존재하지 않는 일정입니다.")
+        }
+
+        val attendances =
+            scheduleMemberApplyRepository.findByScheduleIdOrderByCreatedAtAsc(scheduleId).map { apply ->
+                ScheduleAttendanceItem(
+                    userId = apply.memberId,
+                    isChecked = apply.attendedAt != null,
+                    createdAt = apply.createdAt,
+                )
+            }
+
+        return ListScheduleAttendancesResult(attendances = attendances)
+    }
+
+    @Transactional
+    fun checkScheduleAttendance(
+        requester: Requester,
+        scheduleId: Long,
+        code: String,
+    ): CheckScheduleAttendanceResult {
+        val schedule =
+            scheduleRepository.findActiveById(scheduleId)
+                ?: throw NotFoundException("존재하지 않는 일정입니다.")
+
+        if (scheduleMemberApplyRepository.existsByMemberIdAndScheduleId(requester.userId, scheduleId)) {
+            throw ConflictException("이미 출석체크한 일정입니다.")
+        }
+
+        val now = LocalDateTime.now()
+        if (schedule.checkCode == null) {
+            throw BadRequestException("출석 코드가 설정되지 않은 일정입니다.")
+        }
+        if (now.isBefore(schedule.scheduledAt) || now.isAfter(schedule.endAt)) {
+            throw BadRequestException("출석체크 가능한 시간이 아닙니다.")
+        }
+        if (code != schedule.checkCode) {
+            throw UnauthorizedException("출석 코드가 일치하지 않습니다.")
+        }
+
+        val attendance =
+            scheduleMemberApplyRepository.save(
+                ScheduleMemberApply(
+                    memberId = requester.userId,
+                    scheduleId = scheduleId,
+                    attendedAt = now,
+                ),
+            )
+
+        if (schedule.expoint > 0) {
+            pointService.givePoint(
+                targetUserId = requester.userId,
+                point = schedule.expoint,
+                message = "${schedule.title} 출석",
+            )
+        }
+
+        return CheckScheduleAttendanceResult(
+            scheduleId = attendance.scheduleId,
+            userId = attendance.memberId,
+            expointGranted = schedule.expoint,
+            createdAt = attendance.createdAt,
+        )
+    }
+
+    @Transactional
+    fun addScheduleAttendances(
+        requester: Requester,
+        scheduleId: Long,
+        userIds: List<Long>,
+    ) {
+        if (requester.role != UserRole.MANAGER) {
+            throw ForbiddenException("권한이 부족합니다.")
+        }
+        if (userIds.isEmpty()) {
+            throw BadRequestException("출석 처리할 사용자를 선택해 주세요.")
+        }
+        if (userIds.size != userIds.distinct().size) {
+            throw BadRequestException("요청에 중복된 유저 ID가 포함되어 있습니다.")
+        }
+
+        val schedule =
+            scheduleRepository.findActiveById(scheduleId)
+                ?: throw NotFoundException("존재하지 않는 일정입니다.")
+
+        userIds.forEach { userId ->
+            if (!memberRepository.existsById(userId)) {
+                throw NotFoundException("사용자를 찾을 수 없습니다.")
+            }
+        }
+
+        val existingUserIds =
+            scheduleMemberApplyRepository.findByMemberIdInAndScheduleId(
+                memberIds = userIds,
+                scheduleId = scheduleId,
+            ).map { it.memberId }
+
+        if (existingUserIds.isNotEmpty()) {
+            throw ConflictException("이미 출석 처리된 사용자가 포함되어 있습니다.")
+        }
+
+        val now = LocalDateTime.now()
+        val attendances =
+            userIds.map { userId ->
+                ScheduleMemberApply(
+                    memberId = userId,
+                    scheduleId = scheduleId,
+                    attendedAt = now,
+                )
+            }
+        scheduleMemberApplyRepository.saveAll(attendances)
+
+        if (schedule.expoint > 0) {
+            userIds.forEach { userId ->
+                pointService.givePoint(
+                    targetUserId = userId,
+                    point = schedule.expoint,
+                    message = "${schedule.title} 출석 (관리자 추가)",
+                )
+            }
+        }
+    }
+
+    @Transactional
+    fun removeScheduleAttendance(
+        requester: Requester,
+        scheduleId: Long,
+        userId: Long,
+    ) {
+        if (requester.role != UserRole.MANAGER) {
+            throw ForbiddenException("권한이 부족합니다.")
+        }
+
+        val schedule =
+            scheduleRepository.findActiveById(scheduleId)
+                ?: throw NotFoundException("존재하지 않는 일정입니다.")
+        val attendance =
+            scheduleMemberApplyRepository.findByMemberIdAndScheduleId(
+                memberId = userId,
+                scheduleId = scheduleId,
+            ) ?: throw NotFoundException("출석 기록을 찾을 수 없습니다.")
+
+        scheduleMemberApplyRepository.delete(attendance)
+
+        if (schedule.expoint > 0) {
+            pointService.givePoint(
+                targetUserId = userId,
+                point = -schedule.expoint,
+                message = "${schedule.title} 출석 취소",
+            )
+        }
     }
 
     @Transactional
@@ -171,8 +340,13 @@ class ScheduleService(
         return minimumId + timePart * 1000 + randomPart
     }
 
+    private fun Schedule.isAttendanceActive(now: LocalDateTime): Boolean {
+        return !scheduledAt.isAfter(now) && !endAt.isBefore(now) && checkCode != null
+    }
+
     companion object {
         private val KST: ZoneId = ZoneId.of("Asia/Seoul")
+        private const val DEFAULT_ACTIVE_SCHEDULE_LIMIT = 50
         private const val MAX_SCHEDULE_ID_RETRY = 3
     }
 }
