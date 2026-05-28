@@ -25,6 +25,7 @@ import org.mockito.kotlin.verify
 import java.time.LocalDateTime
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -139,7 +140,7 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `createSchedule은 checkCode가 null이면 null 상태로 저장한다`() {
+    fun `createSchedule은 generateCheckCode가 false면 checkCode를 null로 저장한다`() {
         val requester = Requester(userId = 1L, role = UserRole.MANAGER)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
 
@@ -152,7 +153,7 @@ class ScheduleServiceTest {
                 scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
                 endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
                 expoint = 10,
-                checkCode = null,
+                generateCheckCode = false,
             )
 
         assertEquals(ScheduleCategory.CLUB, result.category)
@@ -163,7 +164,7 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `createSchedule은 checkCode가 명시되면 그 값을 그대로 저장한다`() {
+    fun `createSchedule은 generateCheckCode가 true면 4자리 숫자 checkCode를 생성한다`() {
         val requester = Requester(userId = 1L, role = UserRole.MANAGER)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
 
@@ -176,10 +177,12 @@ class ScheduleServiceTest {
                 scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
                 endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
                 expoint = 0,
-                checkCode = "9999",
+                generateCheckCode = true,
             )
 
-        assertEquals("9999", result.checkCode)
+        val checkCode = result.checkCode
+        assertNotNull(checkCode)
+        assertTrue(checkCode.matches(Regex("^\\d{4}$")))
     }
 
     @Test
@@ -195,7 +198,7 @@ class ScheduleServiceTest {
                 scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
                 endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
                 expoint = 0,
-                checkCode = null,
+                generateCheckCode = false,
             )
         }
     }
@@ -213,7 +216,7 @@ class ScheduleServiceTest {
                 scheduledAt = LocalDateTime.of(2026, 5, 18, 16, 0),
                 endAt = LocalDateTime.of(2026, 5, 18, 14, 0),
                 expoint = 0,
-                checkCode = null,
+                generateCheckCode = false,
             )
         }
     }

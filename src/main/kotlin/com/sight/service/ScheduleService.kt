@@ -224,7 +224,7 @@ class ScheduleService(
         scheduledAt: LocalDateTime,
         endAt: LocalDateTime,
         expoint: Int,
-        checkCode: String?,
+        generateCheckCode: Boolean,
     ): Schedule {
         if (requester.role == UserRole.USER && category != ScheduleCategory.GROUP_ACTIVITY) {
             throw ForbiddenException("USER는 그룹활동 카테고리만 생성 가능합니다.")
@@ -244,7 +244,7 @@ class ScheduleService(
                 endAt = endAt,
                 location = location,
                 expoint = expoint,
-                checkCode = checkCode,
+                checkCode = if (generateCheckCode) createCheckCode() else null,
             )
         return scheduleRepository.save(schedule)
     }
@@ -318,6 +318,8 @@ class ScheduleService(
             )
         scheduleRepository.save(trashed)
     }
+
+    private fun createCheckCode(): String = "%04d".format(Random.nextInt(10000))
 
     private fun pickAvailableScheduleId(): Long {
         repeat(MAX_SCHEDULE_ID_RETRY + 1) {

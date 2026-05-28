@@ -18,5 +18,5 @@ data class CreateScheduleRequest(
     val endAt: LocalDateTime,
     @field:PositiveOrZero
     val expoint: Int = 0,
-    val checkCode: String? = null,
+    val generateCheckCode: Boolean = false,
 )
