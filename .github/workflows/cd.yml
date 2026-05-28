@@ -29,8 +29,7 @@ jobs:
 
       - name: Save Docker images
         run: |
-          docker save sight-dev-backend:latest | gzip > sight-dev-backend.tar.gz
-          docker save dev-auth:latest | gzip > dev-auth.tar.gz
+          docker save sight-dev-backend:latest dev-auth:latest | gzip > images.tar.gz
 
       - name: Copy images and compose file to dev server
         uses: appleboy/scp-action@v0.1.7
@@ -39,7 +38,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: sight-dev-backend.tar.gz,dev-auth.tar.gz,docker-compose.dev.yaml
+          source: images.tar.gz,docker-compose.dev.yaml
           target: /home/nananina/
           overwrite: true
 
@@ -50,11 +49,9 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: INTERNAL_API_KEY,AUTH_SERVICE_API_KEY
+          envs: INTERNAL_API_KEY
           script: |
-            docker load < /home/nananina/sight-dev-backend.tar.gz
-            docker load < /home/nananina/dev-auth.tar.gz
-            cd /home/nananina && INTERNAL_API_KEY=$INTERNAL_API_KEY AUTH_SERVICE_API_KEY=$AUTH_SERVICE_API_KEY docker compose -f docker-compose.dev.yaml up -d
+            docker load < /home/nananina/images.tar.gz
+            cd /home/nananina && INTERNAL_API_KEY=$INTERNAL_API_KEY docker compose -f docker-compose.dev.yaml up -d
         env:
           INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
-          AUTH_SERVICE_API_KEY: ${{ secrets.AUTH_SERVICE_API_KEY }}
