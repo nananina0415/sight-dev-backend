@@ -10,10 +10,20 @@ services:
       - MYSQL_PORT=3306
       - DISCORD_ENABLED=false
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - AUTH_SERVICE_ENDPOINT=http://dev-auth:8080
     env_file:
       - "/home/nananina/.env"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
+      dev-auth:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     restart: unless-stopped
 
   mysql:
@@ -24,7 +34,38 @@ services:
       - "/home/nananina/.env"
     volumes:
       - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     restart: unless-stopped
+
+  dev-auth:
+    image: dev-auth:latest
+    restart: unless-stopped
+
+  seeder:
+    image: mysql:8.0.43
+    env_file:
+      - "/home/nananina/.env"
+    depends_on:
+      backend:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        mysql -h mysql -uroot -p$$MYSQL_ROOT_PASSWORD --default-character-set=utf8mb4 sight -e "
+        INSERT INTO khlug_members
+          (id, name, number, admission, realname, college, grade, state, expoint, active, manager, khuisauth_at, updated_at, created_at, last_login, last_enter)
+        VALUES
+          (1, 'member',  20240001, '24', '일반회원', '정보대학', 2, 1, 0, 1, 0, NOW(), NOW(), NOW(), NOW(), NOW()),
+          (2, 'manager', 20240002, '24', '관리자',   '정보대학', 4, 1, 0, 1, 1, NOW(), NOW(), NOW(), NOW(), NOW())
+        ON DUPLICATE KEY UPDATE manager = VALUES(manager);
+        "
+    restart: "no"
 
 volumes:
   mysql-data:
