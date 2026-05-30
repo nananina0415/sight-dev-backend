@@ -11,6 +11,8 @@ import com.sight.domain.schedule.Schedule
 import com.sight.domain.schedule.ScheduleCategory
 import com.sight.domain.schedule.ScheduleMemberApply
 import com.sight.domain.schedule.ScheduleState
+import com.sight.domain.seminar.BigSeminar
+import com.sight.repository.BigSeminarRepository
 import com.sight.repository.MemberRepository
 import com.sight.repository.ScheduleMemberApplyRepository
 import com.sight.repository.ScheduleRepository
@@ -33,6 +35,7 @@ class ScheduleServiceTest {
     private val scheduleRepository: ScheduleRepository = mock()
     private val scheduleMemberApplyRepository: ScheduleMemberApplyRepository = mock()
     private val memberRepository: MemberRepository = mock()
+    private val bigSeminarRepository: BigSeminarRepository = mock()
     private val pointService: PointService = mock()
     private lateinit var scheduleService: ScheduleService
 
@@ -43,6 +46,7 @@ class ScheduleServiceTest {
                 scheduleRepository = scheduleRepository,
                 scheduleMemberApplyRepository = scheduleMemberApplyRepository,
                 memberRepository = memberRepository,
+                bigSeminarRepository = bigSeminarRepository,
                 pointService = pointService,
             )
     }
@@ -186,20 +190,22 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `createSchedule은 USER가 그룹활동 외 카테고리 생성 시도 시 ForbiddenException 던진다`() {
-        val requester = Requester(userId = 1L, role = UserRole.USER)
+    fun `createSchedule은 운영진 카테고리가 아니면 BadRequestException 던진다`() {
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
 
-        assertThrows<ForbiddenException> {
-            scheduleService.createSchedule(
-                requester = requester,
-                title = "test",
-                category = ScheduleCategory.CLUB,
-                location = null,
-                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
-                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
-                expoint = 0,
-                generateCheckCode = false,
-            )
+        listOf(ScheduleCategory.GROUP_ACTIVITY, ScheduleCategory.SEMINAR).forEach { category ->
+            assertThrows<BadRequestException> {
+                scheduleService.createSchedule(
+                    requester = requester,
+                    title = "test",
+                    category = category,
+                    location = null,
+                    scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
+                    endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                    expoint = 0,
+                    generateCheckCode = false,
+                )
+            }
         }
     }
 
@@ -222,18 +228,54 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `updateSchedule은 기존 일정을 수정한다`() {
-        val existing =
-            Schedule(
-                id = 1L,
-                category = ScheduleCategory.CLUB,
-                title = "old",
-                author = 10L,
-                state = ScheduleState.PUBLIC,
+    fun `createGroupActivitySchedule은 GROUP_ACTIVITY로 expoint 0 checkCode 없이 생성한다`() {
+        val requester = Requester(userId = 1L, role = UserRole.USER)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+
+        val result =
+            scheduleService.createGroupActivitySchedule(
+                requester = requester,
+                title = "스터디",
+                location = null,
                 scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
                 endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
-                checkCode = "1234",
             )
+
+        assertEquals(ScheduleCategory.GROUP_ACTIVITY, result.category)
+        assertEquals(0, result.expoint)
+        assertEquals(1L, result.author)
+        assertNull(result.checkCode)
+    }
+
+    @Test
+    fun `createBigSeminarSchedule은 SEMINAR 일정과 빅세미나 레코드를 함께 생성한다`() {
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+        given(bigSeminarRepository.save(any<BigSeminar>())).willAnswer { it.arguments[0] as BigSeminar }
+
+        val (schedule, bigSeminar) =
+            scheduleService.createBigSeminarSchedule(
+                requester = requester,
+                title = "총회",
+                location = null,
+                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                expoint = 50,
+                generateCheckCode = false,
+                isSummerSeason = true,
+                isSpeakAfter = false,
+            )
+
+        assertEquals(ScheduleCategory.SEMINAR, schedule.category)
+        assertEquals(schedule.id, bigSeminar.scheduleId)
+        assertTrue(bigSeminar.isSummerSeason)
+        assertFalse(bigSeminar.isSpeakAfter)
+        verify(bigSeminarRepository).save(any<BigSeminar>())
+    }
+
+    @Test
+    fun `updateSchedule은 운영진 카테고리 일정을 수정하며 카테고리는 유지된다`() {
+        val existing = scheduleOf(category = ScheduleCategory.CLUB, checkCode = "1234")
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
         val requester = Requester(userId = 99L, role = UserRole.MANAGER)
@@ -243,7 +285,6 @@ class ScheduleServiceTest {
                 requester = requester,
                 id = 1L,
                 title = "new",
-                category = ScheduleCategory.SEMINAR,
                 location = "khlug_406",
                 scheduledAt = LocalDateTime.of(2026, 5, 20, 14, 0),
                 endAt = LocalDateTime.of(2026, 5, 20, 16, 0),
@@ -251,8 +292,28 @@ class ScheduleServiceTest {
             )
 
         assertEquals("new", result.title)
-        assertEquals(ScheduleCategory.SEMINAR, result.category)
+        assertEquals(ScheduleCategory.CLUB, result.category)
         assertEquals("1234", result.checkCode)
+        assertEquals(5, result.expoint)
+    }
+
+    @Test
+    fun `updateSchedule은 대상이 운영진 카테고리가 아니면 BadRequestException 던진다`() {
+        val existing = scheduleOf(category = ScheduleCategory.GROUP_ACTIVITY)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+
+        assertThrows<BadRequestException> {
+            scheduleService.updateSchedule(
+                requester = requester,
+                id = 1L,
+                title = "x",
+                location = null,
+                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                expoint = 0,
+            )
+        }
     }
 
     @Test
@@ -265,7 +326,6 @@ class ScheduleServiceTest {
                 requester = requester,
                 id = 999L,
                 title = "x",
-                category = ScheduleCategory.CLUB,
                 location = null,
                 scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
                 endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
@@ -275,75 +335,191 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `updateSchedule은 USER가 타인 작성 일정을 수정 시도 시 ForbiddenException 던진다`() {
-        val existing =
-            Schedule(
+    fun `updateGroupActivitySchedule은 본인 작성 그룹활동을 수정한다`() {
+        val existing = scheduleOf(category = ScheduleCategory.GROUP_ACTIVITY, author = 10L)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+        val requester = Requester(userId = 10L, role = UserRole.USER)
+
+        val result =
+            scheduleService.updateGroupActivitySchedule(
+                requester = requester,
                 id = 1L,
-                category = ScheduleCategory.GROUP_ACTIVITY,
-                title = "x",
-                author = 10L,
-                state = ScheduleState.PUBLIC,
-                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
-                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                title = "new",
+                location = null,
+                scheduledAt = LocalDateTime.of(2026, 5, 20, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 20, 16, 0),
             )
+
+        assertEquals("new", result.title)
+        assertEquals(ScheduleCategory.GROUP_ACTIVITY, result.category)
+    }
+
+    @Test
+    fun `updateGroupActivitySchedule은 USER가 타인 작성 일정을 수정하면 ForbiddenException 던진다`() {
+        val existing = scheduleOf(category = ScheduleCategory.GROUP_ACTIVITY, author = 10L)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
         val requester = Requester(userId = 99L, role = UserRole.USER)
 
         assertThrows<ForbiddenException> {
-            scheduleService.updateSchedule(
+            scheduleService.updateGroupActivitySchedule(
                 requester = requester,
                 id = 1L,
                 title = "x",
-                category = ScheduleCategory.GROUP_ACTIVITY,
                 location = null,
                 scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
                 endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
-                expoint = 0,
             )
         }
     }
 
     @Test
-    fun `updateSchedule은 USER가 본인 작성 그룹활동을 다른 카테고리로 변경 시도 시 ForbiddenException 던진다`() {
-        val existing =
-            Schedule(
-                id = 1L,
-                category = ScheduleCategory.GROUP_ACTIVITY,
-                title = "x",
-                author = 10L,
-                state = ScheduleState.PUBLIC,
-                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
-                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
-            )
+    fun `updateGroupActivitySchedule은 대상이 그룹활동이 아니면 BadRequestException 던진다`() {
+        val existing = scheduleOf(category = ScheduleCategory.CLUB, author = 10L)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
-        val requester = Requester(userId = 10L, role = UserRole.USER)
+        val requester = Requester(userId = 10L, role = UserRole.MANAGER)
 
-        assertThrows<ForbiddenException> {
-            scheduleService.updateSchedule(
+        assertThrows<BadRequestException> {
+            scheduleService.updateGroupActivitySchedule(
                 requester = requester,
                 id = 1L,
                 title = "x",
-                category = ScheduleCategory.CLUB,
                 location = null,
                 scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
                 endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
-                expoint = 0,
             )
         }
     }
 
     @Test
-    fun `deleteSchedule은 일정 state를 TRASH로 전환한다`() {
-        val existing =
-            Schedule(
+    fun `updateBigSeminarSchedule은 세미나 일정과 빅세미나 정보를 갱신한다`() {
+        val existing = scheduleOf(category = ScheduleCategory.SEMINAR)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+        given(bigSeminarRepository.findByScheduleId(1L)).willReturn(null)
+        given(bigSeminarRepository.save(any<BigSeminar>())).willAnswer { it.arguments[0] as BigSeminar }
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+
+        val (schedule, bigSeminar) =
+            scheduleService.updateBigSeminarSchedule(
+                requester = requester,
                 id = 1L,
-                category = ScheduleCategory.CLUB,
+                title = "new",
+                location = null,
+                scheduledAt = LocalDateTime.of(2026, 5, 20, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 20, 16, 0),
+                expoint = 50,
+                isSummerSeason = false,
+                isSpeakAfter = true,
+            )
+
+        assertEquals("new", schedule.title)
+        assertEquals(ScheduleCategory.SEMINAR, schedule.category)
+        assertFalse(bigSeminar.isSummerSeason)
+        assertTrue(bigSeminar.isSpeakAfter)
+    }
+
+    @Test
+    fun `updateBigSeminarSchedule은 대상이 세미나가 아니면 BadRequestException 던진다`() {
+        val existing = scheduleOf(category = ScheduleCategory.CLUB)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+
+        assertThrows<BadRequestException> {
+            scheduleService.updateBigSeminarSchedule(
+                requester = requester,
+                id = 1L,
                 title = "x",
-                author = 10L,
-                state = ScheduleState.PUBLIC,
+                location = null,
                 scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
                 endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                expoint = 0,
+                isSummerSeason = true,
+                isSpeakAfter = true,
             )
+        }
+    }
+
+    @Test
+    fun `updateScheduleCategory는 SEMINAR로 변경 시 빅세미나 레코드를 생성한다`() {
+        val existing = scheduleOf(category = ScheduleCategory.CLUB)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+        given(bigSeminarRepository.findByScheduleId(1L)).willReturn(null)
+        given(bigSeminarRepository.save(any<BigSeminar>())).willAnswer { it.arguments[0] as BigSeminar }
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+
+        val (schedule, bigSeminar) =
+            scheduleService.updateScheduleCategory(
+                requester = requester,
+                id = 1L,
+                category = ScheduleCategory.SEMINAR,
+                isSummerSeason = true,
+                isSpeakAfter = false,
+            )
+
+        assertEquals(ScheduleCategory.SEMINAR, schedule.category)
+        assertNotNull(bigSeminar)
+        verify(bigSeminarRepository).save(any<BigSeminar>())
+    }
+
+    @Test
+    fun `updateScheduleCategory는 SEMINAR로 변경하는데 빅세미나 필드가 없으면 BadRequestException 던진다`() {
+        val existing = scheduleOf(category = ScheduleCategory.CLUB)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+
+        assertThrows<BadRequestException> {
+            scheduleService.updateScheduleCategory(
+                requester = requester,
+                id = 1L,
+                category = ScheduleCategory.SEMINAR,
+                isSummerSeason = null,
+                isSpeakAfter = null,
+            )
+        }
+    }
+
+    @Test
+    fun `updateScheduleCategory는 SEMINAR에서 다른 카테고리로 변경 시 빅세미나 레코드를 삭제한다`() {
+        val existing = scheduleOf(category = ScheduleCategory.SEMINAR)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+
+        val (schedule, bigSeminar) =
+            scheduleService.updateScheduleCategory(
+                requester = requester,
+                id = 1L,
+                category = ScheduleCategory.CLUB,
+                isSummerSeason = null,
+                isSpeakAfter = null,
+            )
+
+        assertEquals(ScheduleCategory.CLUB, schedule.category)
+        assertNull(bigSeminar)
+        verify(bigSeminarRepository).deleteByScheduleId(1L)
+    }
+
+    @Test
+    fun `updateScheduleCategory는 GROUP_ACTIVITY로 변경 시 BadRequestException 던진다`() {
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+
+        assertThrows<BadRequestException> {
+            scheduleService.updateScheduleCategory(
+                requester = requester,
+                id = 1L,
+                category = ScheduleCategory.GROUP_ACTIVITY,
+                isSummerSeason = null,
+                isSpeakAfter = null,
+            )
+        }
+    }
+
+    @Test
+    fun `deleteSchedule은 운영진 일정 state를 TRASH로 전환한다`() {
+        val existing = scheduleOf(category = ScheduleCategory.CLUB)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
         val requester = Requester(userId = 99L, role = UserRole.MANAGER)
@@ -353,6 +529,17 @@ class ScheduleServiceTest {
         val captor = org.mockito.kotlin.argumentCaptor<Schedule>()
         verify(scheduleRepository).save(captor.capture())
         assertEquals(ScheduleState.TRASH, captor.firstValue.state)
+    }
+
+    @Test
+    fun `deleteSchedule은 대상이 운영진 카테고리가 아니면 BadRequestException 던진다`() {
+        val existing = scheduleOf(category = ScheduleCategory.GROUP_ACTIVITY)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+
+        assertThrows<BadRequestException> {
+            scheduleService.deleteSchedule(requester, 1L)
+        }
     }
 
     @Test
@@ -366,43 +553,43 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `deleteSchedule은 USER가 타인 작성 일정을 삭제 시도 시 ForbiddenException 던진다`() {
-        val existing =
-            Schedule(
-                id = 1L,
-                category = ScheduleCategory.GROUP_ACTIVITY,
-                title = "x",
-                author = 10L,
-                state = ScheduleState.PUBLIC,
-                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
-                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
-            )
+    fun `deleteGroupActivitySchedule은 본인 작성 그룹활동을 TRASH로 전환한다`() {
+        val existing = scheduleOf(category = ScheduleCategory.GROUP_ACTIVITY, author = 10L)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+        val requester = Requester(userId = 10L, role = UserRole.USER)
+
+        scheduleService.deleteGroupActivitySchedule(requester, 1L)
+
+        val captor = org.mockito.kotlin.argumentCaptor<Schedule>()
+        verify(scheduleRepository).save(captor.capture())
+        assertEquals(ScheduleState.TRASH, captor.firstValue.state)
+    }
+
+    @Test
+    fun `deleteGroupActivitySchedule은 USER가 타인 작성 일정을 삭제하면 ForbiddenException 던진다`() {
+        val existing = scheduleOf(category = ScheduleCategory.GROUP_ACTIVITY, author = 10L)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
         val requester = Requester(userId = 99L, role = UserRole.USER)
 
         assertThrows<ForbiddenException> {
-            scheduleService.deleteSchedule(requester, 1L)
+            scheduleService.deleteGroupActivitySchedule(requester, 1L)
         }
     }
 
     @Test
-    fun `deleteSchedule은 USER가 본인 작성 비그룹활동 일정을 삭제 시도 시 ForbiddenException 던진다`() {
-        val existing =
-            Schedule(
-                id = 1L,
-                category = ScheduleCategory.CLUB,
-                title = "x",
-                author = 10L,
-                state = ScheduleState.PUBLIC,
-                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
-                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
-            )
+    fun `deleteBigSeminarSchedule은 세미나 일정을 TRASH로 전환하고 빅세미나를 삭제한다`() {
+        val existing = scheduleOf(category = ScheduleCategory.SEMINAR)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
-        val requester = Requester(userId = 10L, role = UserRole.USER)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
 
-        assertThrows<ForbiddenException> {
-            scheduleService.deleteSchedule(requester, 1L)
-        }
+        scheduleService.deleteBigSeminarSchedule(requester, 1L)
+
+        val captor = org.mockito.kotlin.argumentCaptor<Schedule>()
+        verify(scheduleRepository).save(captor.capture())
+        assertEquals(ScheduleState.TRASH, captor.firstValue.state)
+        verify(bigSeminarRepository).deleteByScheduleId(1L)
     }
 
     @Test
@@ -1014,6 +1201,24 @@ class ScheduleServiceTest {
 
         verify(scheduleMemberApplyRepository).delete(attendance)
         verify(pointService).givePoint(userId, -schedule.expoint, "${schedule.title} 출석 취소")
+    }
+
+    private fun scheduleOf(
+        id: Long = 1L,
+        category: ScheduleCategory = ScheduleCategory.CLUB,
+        author: Long = 10L,
+        checkCode: String? = null,
+    ): Schedule {
+        return Schedule(
+            id = id,
+            category = category,
+            title = "일정",
+            author = author,
+            state = ScheduleState.PUBLIC,
+            scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
+            endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+            checkCode = checkCode,
+        )
     }
 
     private fun attendanceSchedule(
