@@ -31,6 +31,15 @@ jobs:
         run: |
           docker save sight-dev-backend:latest dev-auth:latest | gzip > sight-dev-backend.tar.gz
 
+      - name: Remove stale files on dev server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: rm -f /home/nananina/docker-compose.dev.yaml /home/nananina/sight-dev-backend.tar.gz
+
       - name: Copy images and compose file to dev server
         uses: appleboy/scp-action@v0.1.7
         with:
