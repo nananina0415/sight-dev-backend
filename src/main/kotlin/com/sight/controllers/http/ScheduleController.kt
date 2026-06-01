@@ -4,6 +4,7 @@ import com.sight.controllers.http.dto.CreateScheduleRequest
 import com.sight.controllers.http.dto.CreateScheduleResponse
 import com.sight.controllers.http.dto.GetScheduleResponse
 import com.sight.controllers.http.dto.ListSchedulesResponse
+import com.sight.controllers.http.dto.UpdateScheduleCategoryRequest
 import com.sight.controllers.http.dto.UpdateScheduleRequest
 import com.sight.core.auth.Auth
 import com.sight.core.auth.Requester
@@ -17,9 +18,9 @@ import org.springframework.http.HttpStatus
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
@@ -55,7 +56,7 @@ class ScheduleController(
         return GetScheduleResponse.from(schedule, requester.role)
     }
 
-    @Auth([UserRole.USER, UserRole.MANAGER])
+    @Auth([UserRole.MANAGER])
     @PostMapping("/schedules")
     @ResponseStatus(HttpStatus.CREATED)
     fun createSchedule(
@@ -76,8 +77,8 @@ class ScheduleController(
         return CreateScheduleResponse.from(schedule)
     }
 
-    @Auth([UserRole.USER, UserRole.MANAGER])
-    @PutMapping("/schedules/{scheduleId}")
+    @Auth([UserRole.MANAGER])
+    @PatchMapping("/schedules/{scheduleId}")
     fun updateSchedule(
         requester: Requester,
         @PathVariable scheduleId: Long,
@@ -88,7 +89,6 @@ class ScheduleController(
                 requester = requester,
                 id = scheduleId,
                 title = request.title,
-                category = request.category,
                 location = request.location,
                 scheduledAt = request.scheduledAt,
                 endAt = request.endAt,
@@ -97,7 +97,25 @@ class ScheduleController(
         return GetScheduleResponse.from(schedule, requester.role)
     }
 
-    @Auth([UserRole.USER, UserRole.MANAGER])
+    @Auth([UserRole.MANAGER])
+    @PatchMapping("/schedules/{scheduleId}/category")
+    fun updateScheduleCategory(
+        requester: Requester,
+        @PathVariable scheduleId: Long,
+        @Valid @RequestBody request: UpdateScheduleCategoryRequest,
+    ): GetScheduleResponse {
+        val (schedule, bigSeminar) =
+            scheduleService.updateScheduleCategory(
+                requester = requester,
+                id = scheduleId,
+                category = request.category,
+                isSummerSeason = request.isSummerSeason,
+                isSpeakAfter = request.isSpeakAfter,
+            )
+        return GetScheduleResponse.from(schedule, requester.role, bigSeminar)
+    }
+
+    @Auth([UserRole.MANAGER])
     @DeleteMapping("/schedules/{scheduleId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun deleteSchedule(

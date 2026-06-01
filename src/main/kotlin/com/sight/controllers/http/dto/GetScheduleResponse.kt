@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude
 import com.sight.core.auth.UserRole
 import com.sight.domain.schedule.Schedule
 import com.sight.domain.schedule.ScheduleCategory
+import com.sight.domain.seminar.BigSeminar
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class GetScheduleResponse(
@@ -19,11 +20,15 @@ data class GetScheduleResponse(
     val author: Long,
     val createdAt: String,
     val updatedAt: String,
+    // 세미나 일정에 한해 포함 (그 외 카테고리에서는 응답에서 누락)
+    val isSummerSeason: Boolean?,
+    val isSpeakAfter: Boolean?,
 ) {
     companion object {
         fun from(
             schedule: Schedule,
             role: UserRole,
+            bigSeminar: BigSeminar? = null,
         ): GetScheduleResponse {
             return GetScheduleResponse(
                 id = schedule.id,
@@ -38,6 +43,8 @@ data class GetScheduleResponse(
                 author = schedule.author,
                 createdAt = schedule.createdAt.toString(),
                 updatedAt = schedule.updatedAt.toString(),
+                isSummerSeason = bigSeminar?.isSummerSeason,
+                isSpeakAfter = bigSeminar?.isSpeakAfter,
             )
         }
     }

@@ -11,6 +11,8 @@ import com.sight.domain.schedule.Schedule
 import com.sight.domain.schedule.ScheduleCategory
 import com.sight.domain.schedule.ScheduleMemberApply
 import com.sight.domain.schedule.ScheduleState
+import com.sight.domain.seminar.BigSeminar
+import com.sight.repository.BigSeminarRepository
 import com.sight.repository.MemberRepository
 import com.sight.repository.ScheduleMemberApplyRepository
 import com.sight.repository.ScheduleRepository
@@ -30,6 +32,7 @@ class ScheduleService(
     private val scheduleRepository: ScheduleRepository,
     private val scheduleMemberApplyRepository: ScheduleMemberApplyRepository,
     private val memberRepository: MemberRepository,
+    private val bigSeminarRepository: BigSeminarRepository,
     private val pointService: PointService,
 ) {
     @Transactional(readOnly = true)
@@ -215,6 +218,28 @@ class ScheduleService(
         }
     }
 
+    // ===== 생성 =====
+
+    @Transactional
+    fun createGroupActivitySchedule(
+        requester: Requester,
+        title: String,
+        location: String?,
+        scheduledAt: LocalDateTime,
+        endAt: LocalDateTime,
+    ): Schedule {
+        return saveNewSchedule(
+            requester = requester,
+            title = title,
+            category = ScheduleCategory.GROUP_ACTIVITY,
+            location = location,
+            scheduledAt = scheduledAt,
+            endAt = endAt,
+            expoint = 0,
+            generateCheckCode = false,
+        )
+    }
+
     @Transactional
     fun createSchedule(
         requester: Requester,
@@ -226,13 +251,155 @@ class ScheduleService(
         expoint: Int,
         generateCheckCode: Boolean,
     ): Schedule {
-        if (requester.role == UserRole.USER && category != ScheduleCategory.GROUP_ACTIVITY) {
-            throw ForbiddenException("USER는 그룹활동 카테고리만 생성 가능합니다.")
+        if (!category.isManagerCategory) {
+            throw BadRequestException("그룹 활동·세미나 일정은 전용 엔드포인트를 사용해 주세요.")
         }
-        if (!endAt.isAfter(scheduledAt)) {
-            throw BadRequestException("종료 시각은 시작 시각 이후여야 합니다.")
-        }
+        return saveNewSchedule(requester, title, category, location, scheduledAt, endAt, expoint, generateCheckCode)
+    }
 
+    @Transactional
+    fun createBigSeminarSchedule(
+        requester: Requester,
+        title: String,
+        location: String?,
+        scheduledAt: LocalDateTime,
+        endAt: LocalDateTime,
+        expoint: Int,
+        generateCheckCode: Boolean,
+        isSummerSeason: Boolean,
+        isSpeakAfter: Boolean,
+    ): Pair<Schedule, BigSeminar> {
+        val schedule =
+            saveNewSchedule(requester, title, ScheduleCategory.SEMINAR, location, scheduledAt, endAt, expoint, generateCheckCode)
+        val bigSeminar = upsertBigSeminar(schedule.id, isSummerSeason, isSpeakAfter)
+        return schedule to bigSeminar
+    }
+
+    // ===== 수정 =====
+
+    @Transactional
+    fun updateGroupActivitySchedule(
+        requester: Requester,
+        id: Long,
+        title: String,
+        location: String?,
+        scheduledAt: LocalDateTime,
+        endAt: LocalDateTime,
+    ): Schedule {
+        val existing = findActiveScheduleInTier(id) { it.isGroupActivity }
+        assertUserIsAuthor(requester, existing)
+        return applyScheduleUpdate(existing, title, location, scheduledAt, endAt, existing.expoint)
+    }
+
+    @Transactional
+    fun updateSchedule(
+        requester: Requester,
+        id: Long,
+        title: String,
+        location: String?,
+        scheduledAt: LocalDateTime,
+        endAt: LocalDateTime,
+        expoint: Int,
+    ): Schedule {
+        val existing = findActiveScheduleInTier(id) { it.isManagerCategory }
+        return applyScheduleUpdate(existing, title, location, scheduledAt, endAt, expoint)
+    }
+
+    @Transactional
+    fun updateBigSeminarSchedule(
+        requester: Requester,
+        id: Long,
+        title: String,
+        location: String?,
+        scheduledAt: LocalDateTime,
+        endAt: LocalDateTime,
+        expoint: Int,
+        isSummerSeason: Boolean,
+        isSpeakAfter: Boolean,
+    ): Pair<Schedule, BigSeminar> {
+        val existing = findActiveScheduleInTier(id) { it.isSeminar }
+        val updated = applyScheduleUpdate(existing, title, location, scheduledAt, endAt, expoint)
+        val bigSeminar = upsertBigSeminar(updated.id, isSummerSeason, isSpeakAfter)
+        return updated to bigSeminar
+    }
+
+    @Transactional
+    fun updateScheduleCategory(
+        requester: Requester,
+        id: Long,
+        category: ScheduleCategory,
+        isSummerSeason: Boolean?,
+        isSpeakAfter: Boolean?,
+    ): Pair<Schedule, BigSeminar?> {
+        if (category.isGroupActivity) {
+            throw BadRequestException("그룹 활동 카테고리로는 변경할 수 없습니다.")
+        }
+        val existing =
+            scheduleRepository.findActiveById(id)
+                ?: throw NotFoundException("존재하지 않는 일정입니다.")
+
+        val updated = scheduleRepository.save(existing.copy(category = category, updatedAt = LocalDateTime.now()))
+
+        val bigSeminar =
+            when {
+                category.isSeminar -> {
+                    val summer = isSummerSeason ?: throw BadRequestException("세미나로 변경하려면 isSummerSeason이 필요합니다.")
+                    val speakAfter = isSpeakAfter ?: throw BadRequestException("세미나로 변경하려면 isSpeakAfter가 필요합니다.")
+                    upsertBigSeminar(updated.id, summer, speakAfter)
+                }
+                existing.category.isSeminar -> {
+                    bigSeminarRepository.deleteByScheduleId(updated.id)
+                    null
+                }
+                else -> null
+            }
+        return updated to bigSeminar
+    }
+
+    // ===== 삭제 =====
+
+    @Transactional
+    fun deleteGroupActivitySchedule(
+        requester: Requester,
+        id: Long,
+    ) {
+        val existing = findActiveScheduleInTier(id) { it.isGroupActivity }
+        assertUserIsAuthor(requester, existing)
+        softDeleteSchedule(existing)
+    }
+
+    @Transactional
+    fun deleteSchedule(
+        requester: Requester,
+        id: Long,
+    ) {
+        val existing = findActiveScheduleInTier(id) { it.isManagerCategory }
+        softDeleteSchedule(existing)
+    }
+
+    @Transactional
+    fun deleteBigSeminarSchedule(
+        requester: Requester,
+        id: Long,
+    ) {
+        val existing = findActiveScheduleInTier(id) { it.isSeminar }
+        softDeleteSchedule(existing)
+        bigSeminarRepository.deleteByScheduleId(existing.id)
+    }
+
+    // ===== 공통 helper =====
+
+    private fun saveNewSchedule(
+        requester: Requester,
+        title: String,
+        category: ScheduleCategory,
+        location: String?,
+        scheduledAt: LocalDateTime,
+        endAt: LocalDateTime,
+        expoint: Int,
+        generateCheckCode: Boolean,
+    ): Schedule {
+        validateTimeRange(scheduledAt, endAt)
         val schedule =
             Schedule(
                 id = pickAvailableScheduleId(),
@@ -249,74 +416,77 @@ class ScheduleService(
         return scheduleRepository.save(schedule)
     }
 
-    @Transactional
-    fun updateSchedule(
-        requester: Requester,
-        id: Long,
+    private fun applyScheduleUpdate(
+        existing: Schedule,
         title: String,
-        category: ScheduleCategory,
         location: String?,
         scheduledAt: LocalDateTime,
         endAt: LocalDateTime,
         expoint: Int,
     ): Schedule {
-        val existing =
-            scheduleRepository.findActiveById(id)
-                ?: throw NotFoundException("존재하지 않는 일정입니다.")
-
-        if (requester.role == UserRole.USER) {
-            if (existing.author != requester.userId) {
-                throw ForbiddenException("본인이 작성한 일정만 수정 가능합니다.")
-            }
-            if (existing.category != ScheduleCategory.GROUP_ACTIVITY) {
-                throw ForbiddenException("그룹활동 카테고리 일정만 수정 가능합니다.")
-            }
-            if (category != ScheduleCategory.GROUP_ACTIVITY) {
-                throw ForbiddenException("category를 그룹활동 외로 변경할 수 없습니다.")
-            }
-        }
-
-        if (!endAt.isAfter(scheduledAt)) {
-            throw BadRequestException("종료 시각은 시작 시각 이후여야 합니다.")
-        }
-
-        val updated =
+        validateTimeRange(scheduledAt, endAt)
+        return scheduleRepository.save(
             existing.copy(
                 title = title,
-                category = category,
                 location = location,
                 scheduledAt = scheduledAt,
                 endAt = endAt,
                 expoint = expoint,
                 updatedAt = LocalDateTime.now(),
-            )
-        return scheduleRepository.save(updated)
+            ),
+        )
     }
 
-    @Transactional
-    fun deleteSchedule(
-        requester: Requester,
+    private fun softDeleteSchedule(existing: Schedule) {
+        scheduleRepository.save(existing.copy(state = ScheduleState.TRASH, updatedAt = LocalDateTime.now()))
+    }
+
+    private fun upsertBigSeminar(
+        scheduleId: Long,
+        isSummerSeason: Boolean,
+        isSpeakAfter: Boolean,
+    ): BigSeminar {
+        val existing = bigSeminarRepository.findByScheduleId(scheduleId)
+        val entity =
+            existing?.copy(isSummerSeason = isSummerSeason, isSpeakAfter = isSpeakAfter)
+                ?: BigSeminar(
+                    id = scheduleId.toString(),
+                    scheduleId = scheduleId,
+                    isSummerSeason = isSummerSeason,
+                    isSpeakAfter = isSpeakAfter,
+                )
+        return bigSeminarRepository.save(entity)
+    }
+
+    private fun findActiveScheduleInTier(
         id: Long,
-    ) {
+        inTier: (ScheduleCategory) -> Boolean,
+    ): Schedule {
         val existing =
             scheduleRepository.findActiveById(id)
                 ?: throw NotFoundException("존재하지 않는 일정입니다.")
-
-        if (requester.role == UserRole.USER) {
-            if (existing.author != requester.userId) {
-                throw ForbiddenException("본인이 작성한 일정만 삭제 가능합니다.")
-            }
-            if (existing.category != ScheduleCategory.GROUP_ACTIVITY) {
-                throw ForbiddenException("그룹활동 카테고리 일정만 삭제 가능합니다.")
-            }
+        if (!inTier(existing.category)) {
+            throw BadRequestException("이 엔드포인트로 처리할 수 없는 카테고리의 일정입니다.")
         }
+        return existing
+    }
 
-        val trashed =
-            existing.copy(
-                state = ScheduleState.TRASH,
-                updatedAt = LocalDateTime.now(),
-            )
-        scheduleRepository.save(trashed)
+    private fun assertUserIsAuthor(
+        requester: Requester,
+        existing: Schedule,
+    ) {
+        if (requester.role == UserRole.USER && existing.author != requester.userId) {
+            throw ForbiddenException("본인이 작성한 일정만 수정·삭제할 수 있습니다.")
+        }
+    }
+
+    private fun validateTimeRange(
+        scheduledAt: LocalDateTime,
+        endAt: LocalDateTime,
+    ) {
+        if (!endAt.isAfter(scheduledAt)) {
+            throw BadRequestException("종료 시각은 시작 시각 이후여야 합니다.")
+        }
     }
 
     private fun createCheckCode(): String = "%04d".format(Random.nextInt(10000))
