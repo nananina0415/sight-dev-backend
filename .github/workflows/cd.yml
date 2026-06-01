@@ -32,6 +32,7 @@ jobs:
           docker save sight-dev-backend:latest dev-auth:latest | gzip > sight-dev-backend.tar.gz
 
       - name: Remove stale files on dev server
+        continue-on-error: true
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
