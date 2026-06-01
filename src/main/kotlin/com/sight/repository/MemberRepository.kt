@@ -11,7 +11,7 @@ interface MemberRepository : JpaRepository<Member, Long>, MemberRepositoryCustom
     fun findByManagerTrue(): List<Member>
 
     fun findByNumberIsNotNull(): List<Member>
-  
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     fun findByNumber(number: Long): Member?
 }
