@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.PositiveOrZero
 import java.time.LocalDateTime
 
-data class UpdateScheduleRequest(
+data class UpdateBigSeminarScheduleRequest(
     @field:NotBlank
     val title: String,
     val location: String?,
@@ -15,4 +15,6 @@ data class UpdateScheduleRequest(
     val endAt: LocalDateTime,
     @field:PositiveOrZero
     val expoint: Int,
+    val isSummerSeason: Boolean,
+    val isSpeakAfter: Boolean,
 )
