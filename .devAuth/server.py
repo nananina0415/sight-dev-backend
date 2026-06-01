@@ -14,16 +14,7 @@ USERS = {
 def internal_auth():
     if request.headers.get("x-api-key") != API_KEY:
         return jsonify({"login": False}), 401
-    token = None
-    for part in request.headers.get("Cookie", "").split(";"):
-        part = part.strip()
-        if part.startswith("session="):
-            token = part[len("session="):]
-            break
-    user = USERS.get(token) if token else None
-    if not user:
-        return jsonify({"login": False})
-    return jsonify({"login": True, "userId": user["userId"]})
+    return jsonify({"login": True, "userId": USERS["manager"]["userId"]})
 
 
 @app.route("/internal/point", methods=["POST"])
