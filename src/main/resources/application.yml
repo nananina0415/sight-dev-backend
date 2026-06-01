@@ -70,6 +70,14 @@ khlug:
   phone:
     webhook-url: ${SYSTEM_ALERT_DISCORD_WEBHOOK:}
 
+naver:
+  client-id: ${NAVER_CLIENT_ID:}
+  client-secret: ${NAVER_CLIENT_SECRET:}
+
+stuauth:
+  api-uri: ${STUAUTH_API_URI:}
+  token: ${STUAUTH_TOKEN:}
+
 ---
 spring:
   config:
@@ -117,3 +125,7 @@ khlug:
     webhook-url: ${DOOR_LOCK_ALERT_DISCORD_WEBHOOK:}
   phone:
     webhook-url: ${SYSTEM_ALERT_DISCORD_WEBHOOK:}
+
+stuauth:
+  api-uri: ${STUAUTH_API_URI}
+  token: ${STUAUTH_TOKEN}
