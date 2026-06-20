@@ -7,6 +7,7 @@ import com.sight.core.exception.ConflictException
 import com.sight.core.exception.ForbiddenException
 import com.sight.core.exception.NotFoundException
 import com.sight.core.exception.UnauthorizedException
+import com.sight.domain.group.GroupState
 import com.sight.domain.schedule.Schedule
 import com.sight.domain.schedule.ScheduleCategory
 import com.sight.domain.schedule.ScheduleMemberApply
@@ -68,10 +69,12 @@ class ScheduleService(
 
     @Transactional(readOnly = true)
     fun getScheduleWithDetails(id: Long): Triple<Schedule, String, String?> {
-        val schedule = scheduleRepository.findActiveById(id)
-            ?: throw NotFoundException("존재하지 않는 일정입니다.")
+        val schedule =
+            scheduleRepository.findActiveById(id)
+                ?: throw NotFoundException("존재하지 않는 일정입니다.")
         val authorName = memberRepository.findById(schedule.author).map { it.name }.orElse(null)
-        val groupTitle = schedule.groupId?.let { groupRepository.findById(it).map { g -> g.title }.orElse(null) }
+        val groupTitle =
+            schedule.groupId?.let { groupRepository.findById(it).map { g -> g.title }.orElse(null) }
         return Triple(schedule, authorName ?: "알 수 없음", groupTitle)
     }
 
@@ -242,6 +245,11 @@ class ScheduleService(
         endAt: LocalDateTime,
         groupId: Long,
     ): Schedule {
+        val group =
+            groupRepository.findById(groupId).orElseThrow { NotFoundException("존재하지 않는 그룹입니다.") }
+        if (group.state != GroupState.PROGRESS) {
+            throw BadRequestException("진행 중인 그룹만 그룹 활동 일정을 등록할 수 있습니다.")
+        }
         if (!groupMemberRepository.existsByGroupIdAndMemberId(groupId, requester.userId)) {
             throw ForbiddenException("해당 그룹의 멤버만 그룹 활동 일정을 등록할 수 있습니다.")
         }
