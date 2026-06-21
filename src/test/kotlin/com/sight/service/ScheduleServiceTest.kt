@@ -7,12 +7,21 @@ import com.sight.core.exception.ConflictException
 import com.sight.core.exception.ForbiddenException
 import com.sight.core.exception.NotFoundException
 import com.sight.core.exception.UnauthorizedException
+import com.sight.domain.group.Group
+import com.sight.domain.group.GroupAccessGrade
+import com.sight.domain.group.GroupCategory
+import com.sight.domain.group.GroupState
+import com.sight.domain.member.Member
+import com.sight.domain.member.StudentStatus
+import com.sight.domain.member.UserStatus
 import com.sight.domain.schedule.Schedule
 import com.sight.domain.schedule.ScheduleCategory
 import com.sight.domain.schedule.ScheduleMemberApply
 import com.sight.domain.schedule.ScheduleState
 import com.sight.domain.seminar.BigSeminar
 import com.sight.repository.BigSeminarRepository
+import com.sight.repository.GroupMemberRepository
+import com.sight.repository.GroupRepository
 import com.sight.repository.MemberRepository
 import com.sight.repository.ScheduleMemberApplyRepository
 import com.sight.repository.ScheduleRepository
@@ -25,6 +34,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import java.time.LocalDateTime
+import java.util.Optional
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -36,6 +46,8 @@ class ScheduleServiceTest {
     private val scheduleMemberApplyRepository: ScheduleMemberApplyRepository = mock()
     private val memberRepository: MemberRepository = mock()
     private val bigSeminarRepository: BigSeminarRepository = mock()
+    private val groupMemberRepository: GroupMemberRepository = mock()
+    private val groupRepository: GroupRepository = mock()
     private val pointService: PointService = mock()
     private lateinit var scheduleService: ScheduleService
 
@@ -47,6 +59,8 @@ class ScheduleServiceTest {
                 scheduleMemberApplyRepository = scheduleMemberApplyRepository,
                 memberRepository = memberRepository,
                 bigSeminarRepository = bigSeminarRepository,
+                groupMemberRepository = groupMemberRepository,
+                groupRepository = groupRepository,
                 pointService = pointService,
             )
     }
@@ -144,6 +158,85 @@ class ScheduleServiceTest {
     }
 
     @Test
+    fun `getScheduleWithDetails는 작성자명과 그룹명을 함께 반환한다`() {
+        val schedule =
+            Schedule(
+                id = 1L,
+                category = ScheduleCategory.GROUP_ACTIVITY,
+                title = "스터디",
+                author = 10L,
+                state = ScheduleState.PUBLIC,
+                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                groupId = 20L,
+            )
+        val member =
+            Member(
+                id = 10L,
+                name = "khlug_user",
+                admission = "21",
+                realname = "홍길동",
+                college = "소프트웨어융합대학",
+                grade = 3L,
+                studentStatus = StudentStatus.UNDERGRADUATE,
+                status = UserStatus.ACTIVE,
+            )
+        val group =
+            Group(
+                id = 20L,
+                category = GroupCategory.STUDY,
+                title = "코틀린 스터디",
+                author = 10L,
+                master = 10L,
+                state = GroupState.PROGRESS,
+                grade = GroupAccessGrade.MEMBER,
+            )
+        given(scheduleRepository.findActiveById(1L)).willReturn(schedule)
+        given(memberRepository.findById(10L)).willReturn(Optional.of(member))
+        given(groupRepository.findById(20L)).willReturn(Optional.of(group))
+
+        val (resultSchedule, authorName, groupTitle) = scheduleService.getScheduleWithDetails(1L)
+
+        assertEquals(1L, resultSchedule.id)
+        assertEquals("khlug_user", authorName)
+        assertEquals("코틀린 스터디", groupTitle)
+    }
+
+    @Test
+    fun `getScheduleWithDetails는 groupId가 null이면 groupTitle이 null이다`() {
+        val schedule =
+            Schedule(
+                id = 1L,
+                category = ScheduleCategory.CLUB,
+                title = "동아리 모임",
+                author = 10L,
+                state = ScheduleState.PUBLIC,
+                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                groupId = null,
+            )
+        val member =
+            Member(
+                id = 10L,
+                name = "khlug_user",
+                admission = "21",
+                realname = "홍길동",
+                college = "소프트웨어융합대학",
+                grade = 3L,
+                studentStatus = StudentStatus.UNDERGRADUATE,
+                status = UserStatus.ACTIVE,
+            )
+        given(scheduleRepository.findActiveById(1L)).willReturn(schedule)
+        given(memberRepository.findById(10L)).willReturn(Optional.of(member))
+
+        val (_, authorName, groupTitle) = scheduleService.getScheduleWithDetails(1L)
+
+        assertEquals("khlug_user", authorName)
+        assertNull(groupTitle)
+        verify(groupRepository, never()).findById(any())
+    }
+
+    @Test
     fun `createSchedule은 generateCheckCode가 false면 checkCode를 null로 저장한다`() {
         val requester = Requester(userId = 1L, role = UserRole.MANAGER)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
@@ -228,8 +321,20 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `createGroupActivitySchedule은 GROUP_ACTIVITY로 expoint 0 checkCode 없이 생성한다`() {
+    fun `createGroupActivitySchedule은 그룹 멤버이면 GROUP_ACTIVITY로 expoint 0 checkCode 없이 생성한다`() {
         val requester = Requester(userId = 1L, role = UserRole.USER)
+        val group =
+            Group(
+                id = 10L,
+                category = GroupCategory.STUDY,
+                title = "스터디",
+                author = 1L,
+                master = 1L,
+                state = GroupState.PROGRESS,
+                grade = GroupAccessGrade.MEMBER,
+            )
+        given(groupRepository.findById(10L)).willReturn(Optional.of(group))
+        given(groupMemberRepository.existsByGroupIdAndMemberId(10L, 1L)).willReturn(true)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
 
         val result =
@@ -239,12 +344,44 @@ class ScheduleServiceTest {
                 location = null,
                 scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
                 endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                groupId = 10L,
             )
 
         assertEquals(ScheduleCategory.GROUP_ACTIVITY, result.category)
         assertEquals(0, result.expoint)
         assertEquals(1L, result.author)
+        assertEquals(10L, result.groupId)
         assertNull(result.checkCode)
+    }
+
+    @Test
+    fun `createGroupActivitySchedule은 해당 그룹 멤버가 아니면 ForbiddenException을 던진다`() {
+        val requester = Requester(userId = 1L, role = UserRole.USER)
+        val group =
+            Group(
+                id = 10L,
+                category = GroupCategory.STUDY,
+                title = "스터디",
+                author = 1L,
+                master = 1L,
+                state = GroupState.PROGRESS,
+                grade = GroupAccessGrade.MEMBER,
+            )
+        given(groupRepository.findById(10L)).willReturn(Optional.of(group))
+        given(groupMemberRepository.existsByGroupIdAndMemberId(10L, 1L)).willReturn(false)
+
+        assertThrows<ForbiddenException> {
+            scheduleService.createGroupActivitySchedule(
+                requester = requester,
+                title = "스터디",
+                location = null,
+                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                groupId = 10L,
+            )
+        }
+
+        verify(scheduleRepository, never()).save(any())
     }
 
     @Test

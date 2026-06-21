@@ -7,12 +7,15 @@ import com.sight.core.exception.ConflictException
 import com.sight.core.exception.ForbiddenException
 import com.sight.core.exception.NotFoundException
 import com.sight.core.exception.UnauthorizedException
+import com.sight.domain.group.GroupState
 import com.sight.domain.schedule.Schedule
 import com.sight.domain.schedule.ScheduleCategory
 import com.sight.domain.schedule.ScheduleMemberApply
 import com.sight.domain.schedule.ScheduleState
 import com.sight.domain.seminar.BigSeminar
 import com.sight.repository.BigSeminarRepository
+import com.sight.repository.GroupMemberRepository
+import com.sight.repository.GroupRepository
 import com.sight.repository.MemberRepository
 import com.sight.repository.ScheduleMemberApplyRepository
 import com.sight.repository.ScheduleRepository
@@ -33,6 +36,8 @@ class ScheduleService(
     private val scheduleMemberApplyRepository: ScheduleMemberApplyRepository,
     private val memberRepository: MemberRepository,
     private val bigSeminarRepository: BigSeminarRepository,
+    private val groupMemberRepository: GroupMemberRepository,
+    private val groupRepository: GroupRepository,
     private val pointService: PointService,
 ) {
     @Transactional(readOnly = true)
@@ -60,6 +65,17 @@ class ScheduleService(
     fun getScheduleById(id: Long): Schedule {
         return scheduleRepository.findActiveById(id)
             ?: throw NotFoundException("존재하지 않는 일정입니다.")
+    }
+
+    @Transactional(readOnly = true)
+    fun getScheduleWithDetails(id: Long): Triple<Schedule, String, String?> {
+        val schedule =
+            scheduleRepository.findActiveById(id)
+                ?: throw NotFoundException("존재하지 않는 일정입니다.")
+        val authorName = memberRepository.findById(schedule.author).map { it.name }.orElse(null)
+        val groupTitle =
+            schedule.groupId?.let { groupRepository.findById(it).map { g -> g.title }.orElse(null) }
+        return Triple(schedule, authorName ?: "알 수 없음", groupTitle)
     }
 
     @Transactional(readOnly = true)
@@ -227,7 +243,16 @@ class ScheduleService(
         location: String?,
         scheduledAt: LocalDateTime,
         endAt: LocalDateTime,
+        groupId: Long,
     ): Schedule {
+        val group =
+            groupRepository.findById(groupId).orElseThrow { NotFoundException("존재하지 않는 그룹입니다.") }
+        if (group.state != GroupState.PROGRESS) {
+            throw BadRequestException("진행 중인 그룹만 그룹 활동 일정을 등록할 수 있습니다.")
+        }
+        if (!groupMemberRepository.existsByGroupIdAndMemberId(groupId, requester.userId)) {
+            throw ForbiddenException("해당 그룹의 멤버만 그룹 활동 일정을 등록할 수 있습니다.")
+        }
         return saveNewSchedule(
             requester = requester,
             title = title,
@@ -237,6 +262,7 @@ class ScheduleService(
             endAt = endAt,
             expoint = 0,
             generateCheckCode = false,
+            groupId = groupId,
         )
     }
 
@@ -398,6 +424,7 @@ class ScheduleService(
         endAt: LocalDateTime,
         expoint: Int,
         generateCheckCode: Boolean,
+        groupId: Long? = null,
     ): Schedule {
         validateTimeRange(scheduledAt, endAt)
         val schedule =
@@ -412,6 +439,7 @@ class ScheduleService(
                 location = location,
                 expoint = expoint,
                 checkCode = if (generateCheckCode) createCheckCode() else null,
+                groupId = groupId,
             )
         return scheduleRepository.save(schedule)
     }
