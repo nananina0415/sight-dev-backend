@@ -18,7 +18,7 @@ data class CreateScheduleResponse(
     val checkCode: String?,
     val author: Long,
     val createdAt: String,
-    // 세미나 일정에 한해 포함 (그 외 카테고리에서는 응답에서 누락)
+    // 총회 일정에 한해 포함 (그 외 카테고리에서는 응답에서 누락)
     val isSummerSeason: Boolean?,
     val isSpeakAfter: Boolean?,
 ) {

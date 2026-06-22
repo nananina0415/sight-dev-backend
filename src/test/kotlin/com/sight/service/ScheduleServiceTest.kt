@@ -84,8 +84,8 @@ class ScheduleServiceTest {
                 ),
                 Schedule(
                     id = 2L,
-                    category = ScheduleCategory.SEMINAR,
-                    title = "세미나",
+                    category = ScheduleCategory.BIG_SEMINAR,
+                    title = "총회",
                     author = 2L,
                     state = ScheduleState.PUBLIC,
                     scheduledAt = LocalDateTime.of(2024, 1, 3, 18, 0),
@@ -287,7 +287,7 @@ class ScheduleServiceTest {
     fun `createSchedule은 운영진 카테고리가 아니면 BadRequestException 던진다`() {
         val requester = Requester(userId = 1L, role = UserRole.MANAGER)
 
-        listOf(ScheduleCategory.GROUP_ACTIVITY, ScheduleCategory.SEMINAR).forEach { category ->
+        listOf(ScheduleCategory.GROUP_ACTIVITY, ScheduleCategory.BIG_SEMINAR).forEach { category ->
             assertThrows<BadRequestException> {
                 scheduleService.createSchedule(
                     requester = requester,
@@ -386,7 +386,7 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `createBigSeminarSchedule은 SEMINAR 일정과 빅세미나 레코드를 함께 생성한다`() {
+    fun `createBigSeminarSchedule은 BIG_SEMINAR 일정과 빅세미나 레코드를 함께 생성한다`() {
         val requester = Requester(userId = 1L, role = UserRole.MANAGER)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
         given(bigSeminarRepository.save(any<BigSeminar>())).willAnswer { it.arguments[0] as BigSeminar }
@@ -404,7 +404,7 @@ class ScheduleServiceTest {
                 isSpeakAfter = false,
             )
 
-        assertEquals(ScheduleCategory.SEMINAR, schedule.category)
+        assertEquals(ScheduleCategory.BIG_SEMINAR, schedule.category)
         assertEquals(schedule.id, bigSeminar.scheduleId)
         assertTrue(bigSeminar.isSummerSeason)
         assertFalse(bigSeminar.isSpeakAfter)
@@ -530,8 +530,8 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `updateBigSeminarSchedule은 세미나 일정과 빅세미나 정보를 갱신한다`() {
-        val existing = scheduleOf(category = ScheduleCategory.SEMINAR)
+    fun `updateBigSeminarSchedule은 총회 일정과 빅세미나 정보를 갱신한다`() {
+        val existing = scheduleOf(category = ScheduleCategory.BIG_SEMINAR)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
         given(bigSeminarRepository.findByScheduleId(1L)).willReturn(null)
@@ -552,13 +552,13 @@ class ScheduleServiceTest {
             )
 
         assertEquals("new", schedule.title)
-        assertEquals(ScheduleCategory.SEMINAR, schedule.category)
+        assertEquals(ScheduleCategory.BIG_SEMINAR, schedule.category)
         assertFalse(bigSeminar.isSummerSeason)
         assertTrue(bigSeminar.isSpeakAfter)
     }
 
     @Test
-    fun `updateBigSeminarSchedule은 대상이 세미나가 아니면 BadRequestException 던진다`() {
+    fun `updateBigSeminarSchedule은 대상이 총회가 아니면 BadRequestException 던진다`() {
         val existing = scheduleOf(category = ScheduleCategory.CLUB)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
         val requester = Requester(userId = 1L, role = UserRole.MANAGER)
@@ -579,7 +579,7 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `updateScheduleCategory는 SEMINAR로 변경 시 빅세미나 레코드를 생성한다`() {
+    fun `updateScheduleCategory는 BIG_SEMINAR로 변경 시 빅세미나 레코드를 생성한다`() {
         val existing = scheduleOf(category = ScheduleCategory.CLUB)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
@@ -591,18 +591,18 @@ class ScheduleServiceTest {
             scheduleService.updateScheduleCategory(
                 requester = requester,
                 id = 1L,
-                category = ScheduleCategory.SEMINAR,
+                category = ScheduleCategory.BIG_SEMINAR,
                 isSummerSeason = true,
                 isSpeakAfter = false,
             )
 
-        assertEquals(ScheduleCategory.SEMINAR, schedule.category)
+        assertEquals(ScheduleCategory.BIG_SEMINAR, schedule.category)
         assertNotNull(bigSeminar)
         verify(bigSeminarRepository).save(any<BigSeminar>())
     }
 
     @Test
-    fun `updateScheduleCategory는 SEMINAR로 변경하는데 빅세미나 필드가 없으면 BadRequestException 던진다`() {
+    fun `updateScheduleCategory는 BIG_SEMINAR로 변경하는데 빅세미나 필드가 없으면 BadRequestException 던진다`() {
         val existing = scheduleOf(category = ScheduleCategory.CLUB)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
@@ -612,7 +612,7 @@ class ScheduleServiceTest {
             scheduleService.updateScheduleCategory(
                 requester = requester,
                 id = 1L,
-                category = ScheduleCategory.SEMINAR,
+                category = ScheduleCategory.BIG_SEMINAR,
                 isSummerSeason = null,
                 isSpeakAfter = null,
             )
@@ -620,8 +620,8 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `updateScheduleCategory는 SEMINAR에서 다른 카테고리로 변경 시 빅세미나 레코드를 삭제한다`() {
-        val existing = scheduleOf(category = ScheduleCategory.SEMINAR)
+    fun `updateScheduleCategory는 BIG_SEMINAR에서 다른 카테고리로 변경 시 빅세미나 레코드를 삭제한다`() {
+        val existing = scheduleOf(category = ScheduleCategory.BIG_SEMINAR)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
         val requester = Requester(userId = 1L, role = UserRole.MANAGER)
@@ -716,8 +716,8 @@ class ScheduleServiceTest {
     }
 
     @Test
-    fun `deleteBigSeminarSchedule은 세미나 일정을 TRASH로 전환하고 빅세미나를 삭제한다`() {
-        val existing = scheduleOf(category = ScheduleCategory.SEMINAR)
+    fun `deleteBigSeminarSchedule은 총회 일정을 TRASH로 전환하고 빅세미나를 삭제한다`() {
+        val existing = scheduleOf(category = ScheduleCategory.BIG_SEMINAR)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
         given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
         val requester = Requester(userId = 1L, role = UserRole.MANAGER)

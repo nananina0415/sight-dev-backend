@@ -1,6 +1,6 @@
-# 세미나 일정 수정
+# 총회 일정 수정
 
-세미나(`SEMINAR`) 일정의 정보를 수정합니다. 운영진(`MANAGER`) 인증이 필요합니다. 이 엔드포인트는 세미나 카테고리 일정만 수정하며, 일정 필드와 함께 빅세미나(`big_seminar`) 정보(`isSummerSeason`·`isSpeakAfter`)를 갱신합니다. `category`는 변경할 수 없습니다(카테고리 변경은 [`update-schedule-category.md`](update-schedule-category.md) 참조). 일정 시작(`scheduledAt`)·종료(`endAt`) 이후에도 시점 제한 없이 수정할 수 있습니다.
+총회(`BIG_SEMINAR`) 일정의 정보를 수정합니다. 운영진(`MANAGER`) 인증이 필요합니다. 이 엔드포인트는 세미나 카테고리 일정만 수정하며, 일정 필드와 함께 빅세미나(`big_seminar`) 정보(`isSummerSeason`·`isSpeakAfter`)를 갱신합니다. `category`는 변경할 수 없습니다(카테고리 변경은 [`update-schedule-category.md`](update-schedule-category.md) 참조). 일정 시작(`scheduledAt`)·종료(`endAt`) 이후에도 시점 제한 없이 수정할 수 있습니다.
 
 > 운영진용 일반 일정은 [`update-schedule.md`](update-schedule.md), 그룹 활동 일정은 [`update-group-activity-schedule.md`](update-group-activity-schedule.md)를 참조하세요.
 
@@ -40,7 +40,7 @@ PATCH /schedules/big-seminar/{scheduleId}
 2. 수정 시 `checkCode`는 변경되지 않는다
 3. `isSummerSeason`/`isSpeakAfter`가 빅세미나 레코드에 반영된다
 4. 없는 일정 → 404
-5. 대상 일정이 `SEMINAR`가 아니면 → 400 (전용 엔드포인트 사용)
+5. 대상 일정이 `BIG_SEMINAR`가 아니면 → 400 (전용 엔드포인트 사용)
 6. `endAt < scheduledAt` → 400
 7. 일정 시작·종료 이후에도 `scheduledAt`/`endAt` 수정 가능 → 200 (시점 제한 없음)
 8. 인증되지 않은 요청 → 401

@@ -53,7 +53,7 @@ PATCH /groups/:groupId/activity-report/:reportId
 | ---------------- | --------- | ------------------------------- |
 | `id`             | id        | `group_activity_report.id`      |
 | `groupId`        | bigint    | group.id                        |
-| `seminarId`      | id        | big_seminar.id                  |
+| `bigSeminarId`   | id        | big_seminar.id                  |
 | `isPresentation` | boolean   | 발표 여부                       |
 | `reportFileKey`  | string    | 보고 파일 key                   |
 | `created_at`     | timestamp | 생성 일자                       |
