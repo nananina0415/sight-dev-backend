@@ -34,6 +34,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.Optional
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -731,7 +732,7 @@ class ScheduleServiceTest {
 
     @Test
     fun `listActiveSchedules는 checkCode가 있고 진행 중인 일정만 반환한다`() {
-        val now = LocalDateTime.now()
+        val now = LocalDateTime.now(ZoneId.of("Asia/Seoul"))
         val activeSchedule =
             Schedule(
                 id = 1L,

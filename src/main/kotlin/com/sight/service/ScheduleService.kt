@@ -55,7 +55,7 @@ class ScheduleService(
 
     @Transactional(readOnly = true)
     fun listActiveSchedules(): List<Schedule> {
-        val now = LocalDateTime.now()
+        val now = LocalDateTime.now(KST)
         val pageable = PageRequest.of(0, DEFAULT_ACTIVE_SCHEDULE_LIMIT)
         return scheduleRepository.findAttendanceActive(now, pageable)
             .filter { it.isAttendanceActive(now) }
@@ -110,7 +110,7 @@ class ScheduleService(
             throw ConflictException("이미 출석체크한 일정입니다.")
         }
 
-        val now = LocalDateTime.now()
+        val now = LocalDateTime.now(KST)
         if (schedule.checkCode == null) {
             throw BadRequestException("출석 코드가 설정되지 않은 일정입니다.")
         }
