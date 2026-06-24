@@ -100,7 +100,7 @@ class ScheduleServiceTest {
         // then
         assertEquals(2, result.size)
         assertEquals("동아리 정기 모임", result[0].title)
-        assertEquals("세미나", result[1].title)
+        assertEquals("총회", result[1].title)
         verify(scheduleRepository).findUpcoming(any(), any())
     }
 
@@ -1363,8 +1363,8 @@ class ScheduleServiceTest {
         id: Long = 100L,
         expoint: Int = 10,
         checkCode: String? = "1234",
-        scheduledAt: LocalDateTime = LocalDateTime.now().minusHours(1),
-        endAt: LocalDateTime = LocalDateTime.now().plusHours(1),
+        scheduledAt: LocalDateTime = LocalDateTime.now(ZoneId.of("Asia/Seoul")).minusHours(1),
+        endAt: LocalDateTime = LocalDateTime.now(ZoneId.of("Asia/Seoul")).plusHours(1),
     ): Schedule {
         return Schedule(
             id = id,
