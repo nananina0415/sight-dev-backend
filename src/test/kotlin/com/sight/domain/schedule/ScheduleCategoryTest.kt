@@ -10,15 +10,15 @@ class ScheduleCategoryTest {
         val category = ScheduleCategory.GROUP_ACTIVITY
 
         assertTrue(category.isGroupActivity)
-        assertFalse(category.isSeminar)
+        assertFalse(category.isBigSeminar)
         assertFalse(category.isManagerCategory)
     }
 
     @Test
-    fun `SEMINAR는 세미나 tier로 분류된다`() {
-        val category = ScheduleCategory.SEMINAR
+    fun `BIG_SEMINAR는 빅세미나 tier로 분류된다`() {
+        val category = ScheduleCategory.BIG_SEMINAR
 
-        assertTrue(category.isSeminar)
+        assertTrue(category.isBigSeminar)
         assertFalse(category.isGroupActivity)
         assertFalse(category.isManagerCategory)
     }
@@ -38,7 +38,7 @@ class ScheduleCategoryTest {
         managerCategories.forEach { category ->
             assertTrue(category.isManagerCategory, "$category 는 운영진 카테고리여야 한다")
             assertFalse(category.isGroupActivity, "$category 는 그룹 활동이 아니어야 한다")
-            assertFalse(category.isSeminar, "$category 는 세미나가 아니어야 한다")
+            assertFalse(category.isBigSeminar, "$category 는 총회가 아니어야 한다")
         }
     }
 
@@ -46,7 +46,7 @@ class ScheduleCategoryTest {
     fun `모든 카테고리는 정확히 하나의 tier에만 속한다`() {
         ScheduleCategory.entries.forEach { category ->
             val matched =
-                listOf(category.isGroupActivity, category.isSeminar, category.isManagerCategory)
+                listOf(category.isGroupActivity, category.isBigSeminar, category.isManagerCategory)
                     .count { it }
 
             assertTrue(matched == 1, "$category 는 정확히 하나의 tier에 속해야 한다 (matched=$matched)")

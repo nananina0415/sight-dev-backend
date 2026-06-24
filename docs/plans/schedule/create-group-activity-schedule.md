@@ -2,7 +2,7 @@
 
 그룹 활동(`GROUP_ACTIVITY`) 일정을 생성합니다. 회원 인증이 필요하며, 일반 회원(`USER`)과 운영진(`MANAGER`) 모두 생성할 수 있습니다. 이 엔드포인트로 생성되는 일정의 `category`는 항상 `GROUP_ACTIVITY`로 고정되며 요청 바디로 받지 않습니다. 그룹 활동 일정은 경험치(`expoint`)와 출첵 코드를 가지지 않습니다.
 
-> 운영진용 일정(`CLUB`/`ACADEMIC` 등)은 [`create-schedule.md`](create-schedule.md), 세미나 일정은 [`create-big-seminar-schedule.md`](create-big-seminar-schedule.md)를 참조하세요.
+> 운영진용 일정(`CLUB`/`ACADEMIC` 등)은 [`create-schedule.md`](create-schedule.md), 총회 일정은 [`create-big-seminar-schedule.md`](create-big-seminar-schedule.md)를 참조하세요.
 
 ## API
 

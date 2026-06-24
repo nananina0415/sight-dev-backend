@@ -1,6 +1,6 @@
-# 세미나 일정 생성
+# 총회 일정 생성
 
-세미나(`SEMINAR`, 총회) 일정을 생성합니다. 운영진(`MANAGER`) 인증이 필요합니다. 이 엔드포인트로 생성되는 일정의 `category`는 항상 `SEMINAR`로 고정되며 요청 바디로 받지 않습니다. 일정 생성과 동시에 빅세미나(`big_seminar`) 레코드가 함께 생성되며, 이를 위해 `isSummerSeason`·`isSpeakAfter` 값을 추가로 받습니다. 빅세미나 레코드의 식별자는 백엔드가 생성합니다. 출첵 코드는 `generateCheckCode=true`인 경우에만 백엔드가 4자리 숫자 코드를 생성·저장합니다.
+총회(`BIG_SEMINAR`) 일정을 생성합니다. 운영진(`MANAGER`) 인증이 필요합니다. 이 엔드포인트로 생성되는 일정의 `category`는 항상 `BIG_SEMINAR`로 고정되며 요청 바디로 받지 않습니다. 일정 생성과 동시에 빅세미나(`big_seminar`) 레코드가 함께 생성되며, 이를 위해 `isSummerSeason`·`isSpeakAfter` 값을 추가로 받습니다. 빅세미나 레코드의 식별자는 백엔드가 생성합니다. 출첵 코드는 `generateCheckCode=true`인 경우에만 백엔드가 4자리 숫자 코드를 생성·저장합니다.
 
 > 운영진용 일반 일정은 [`create-schedule.md`](create-schedule.md), 그룹 활동 일정은 [`create-group-activity-schedule.md`](create-group-activity-schedule.md)를 참조하세요.
 
@@ -37,7 +37,7 @@ POST /schedules/big-seminar
 | :--------------- | :----: |:-----------------------------------|
 | `id`             |  숫자  | 생성된 일정 ID                          |
 | `title`          | 문자열 | 일정 제목                              |
-| `category`       | 문자열 | 항상 `SEMINAR`                       |
+| `category`       | 문자열 | 항상 `BIG_SEMINAR`                   |
 | `location`       | 문자열 | 장소 (nullable)                      |
 | `state`          | 문자열 | 일정 상태 (`public`/`trash`)           |
 | `scheduledAt`    | 문자열 | 시작 일시 (ISO 8601)                   |
@@ -51,7 +51,7 @@ POST /schedules/big-seminar
 
 ### 테스트 케이스
 
-1. 정상 등록 → 201, 응답에 `id`/`createdAt`이 포함되고 `category`는 `SEMINAR`다
+1. 정상 등록 → 201, 응답에 `id`/`createdAt`이 포함되고 `category`는 `BIG_SEMINAR`다
 2. 일정 생성과 함께 빅세미나(`big_seminar`) 레코드가 생성된다 (`isSummerSeason`/`isSpeakAfter` 저장)
 3. `isSummerSeason` 또는 `isSpeakAfter`가 누락되면 400을 반환한다
 4. `generateCheckCode=true` 시 백엔드가 4자리 숫자 출첵 코드를 생성·저장하고 응답 `checkCode`에 반환한다

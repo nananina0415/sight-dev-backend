@@ -31,9 +31,9 @@ GET /groups/:groupId/activity-report
 | `reports`                        | 객체 배열          | 리포트 리스트                                                                               |
 | `reports[].id`                   | id                 | `group_activity_report.id`                                                                  |
 | `reports[].groupId`              | bigint             | group.id                                                                                    |
-| `reports[].seminarDate`          | timestamp\|null    | 세미나 일자 (`schedule.scheduledAt`). 세미나/스케줄 조회 실패 시 null                       |
-| `reports[].seminarIsSummerSeason` | boolean\|null     | true: 여름, false: 겨울. 세미나 조회 실패 시 null                                           |
-| `reports[].seminarIsSpeakAfter`  | boolean\|null      | false:먼저말하기 true:나중에말하기. 세미나 조회 실패 시 null                                |
+| `reports[].bigSeminarDate`          | timestamp\|null    | 총회 일자 (`schedule.scheduledAt`). 총회/스케줄 조회 실패 시 null                       |
+| `reports[].bigSeminarIsSummerSeason` | boolean\|null     | true: 여름, false: 겨울. 총회 조회 실패 시 null                                           |
+| `reports[].bigSeminarIsSpeakAfter`  | boolean\|null      | false:먼저말하기 true:나중에말하기. 총회 조회 실패 시 null                                |
 | `reports[].isPresentation`       | boolean            | 발표 여부                                                                                   |
 | `reports[].reportFileUrl`        | string             | 보고 파일 접근 URL. R2 버킷이 public이면 URL, private이면 백엔드가 생성한 Presigned GET URL (클라에서 다운받기 위함이므로 key가 아닌 url) |
 | `reports[].created_at`           | timestamp          | 생성 일자                                                                                   |

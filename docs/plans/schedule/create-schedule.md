@@ -1,8 +1,8 @@
 # 일정 생성 (운영진)
 
-운영진(`MANAGER`)이 일반 일정을 생성합니다. 운영진 인증이 필요합니다. `category`는 `CLUB`, `ACADEMIC`, `EXTERNAL`, `MANAGEMENT`, `AFTERPARTY`, `OTHER` 중 하나여야 합니다. 그룹 활동(`GROUP_ACTIVITY`)과 세미나(`SEMINAR`)는 전용 엔드포인트가 있으므로 이 엔드포인트에서는 허용되지 않습니다. 출첵 코드는 `generateCheckCode=true`인 경우에만 백엔드가 4자리 숫자 코드를 생성·저장합니다.
+운영진(`MANAGER`)이 일반 일정을 생성합니다. 운영진 인증이 필요합니다. `category`는 `CLUB`, `ACADEMIC`, `EXTERNAL`, `MANAGEMENT`, `AFTERPARTY`, `OTHER` 중 하나여야 합니다. 그룹 활동(`GROUP_ACTIVITY`)과 총회(`BIG_SEMINAR`)는 전용 엔드포인트가 있으므로 이 엔드포인트에서는 허용되지 않습니다. 출첵 코드는 `generateCheckCode=true`인 경우에만 백엔드가 4자리 숫자 코드를 생성·저장합니다.
 
-> 그룹 활동 일정은 [`create-group-activity-schedule.md`](create-group-activity-schedule.md), 세미나 일정은 [`create-big-seminar-schedule.md`](create-big-seminar-schedule.md)를 참조하세요.
+> 그룹 활동 일정은 [`create-group-activity-schedule.md`](create-group-activity-schedule.md), 총회 일정은 [`create-big-seminar-schedule.md`](create-big-seminar-schedule.md)를 참조하세요.
 
 ## API
 
@@ -53,7 +53,7 @@ POST /schedules
 3. `generateCheckCode=true` 시 백엔드가 4자리 숫자 출첵 코드를 생성·저장하고 응답 `checkCode`에 반환한다
 4. `endAt < scheduledAt`이면 400을 반환한다
 5. 허용되지 않는 `category` 값이면 400을 반환한다
-6. `category=GROUP_ACTIVITY` 또는 `category=SEMINAR`로 생성 시도 → 400 (전용 엔드포인트 사용)
+6. `category=GROUP_ACTIVITY` 또는 `category=BIG_SEMINAR`로 생성 시도 → 400 (전용 엔드포인트 사용)
 7. `expoint`가 음수이면 400을 반환한다
 8. 인증되지 않은 요청 → 401
 9. 일반 회원(`USER`)이 생성 시도 → 403

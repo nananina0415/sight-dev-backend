@@ -55,7 +55,7 @@ class ScheduleService(
 
     @Transactional(readOnly = true)
     fun listActiveSchedules(): List<Schedule> {
-        val now = LocalDateTime.now()
+        val now = LocalDateTime.now(KST)
         val pageable = PageRequest.of(0, DEFAULT_ACTIVE_SCHEDULE_LIMIT)
         return scheduleRepository.findAttendanceActive(now, pageable)
             .filter { it.isAttendanceActive(now) }
@@ -110,7 +110,7 @@ class ScheduleService(
             throw ConflictException("이미 출석체크한 일정입니다.")
         }
 
-        val now = LocalDateTime.now()
+        val now = LocalDateTime.now(KST)
         if (schedule.checkCode == null) {
             throw BadRequestException("출석 코드가 설정되지 않은 일정입니다.")
         }
@@ -278,7 +278,7 @@ class ScheduleService(
         generateCheckCode: Boolean,
     ): Schedule {
         if (!category.isManagerCategory) {
-            throw BadRequestException("그룹 활동·세미나 일정은 전용 엔드포인트를 사용해 주세요.")
+            throw BadRequestException("그룹 활동·총회 일정은 전용 엔드포인트를 사용해 주세요.")
         }
         return saveNewSchedule(requester, title, category, location, scheduledAt, endAt, expoint, generateCheckCode)
     }
@@ -296,7 +296,7 @@ class ScheduleService(
         isSpeakAfter: Boolean,
     ): Pair<Schedule, BigSeminar> {
         val schedule =
-            saveNewSchedule(requester, title, ScheduleCategory.SEMINAR, location, scheduledAt, endAt, expoint, generateCheckCode)
+            saveNewSchedule(requester, title, ScheduleCategory.BIG_SEMINAR, location, scheduledAt, endAt, expoint, generateCheckCode)
         val bigSeminar = upsertBigSeminar(schedule.id, isSummerSeason, isSpeakAfter)
         return schedule to bigSeminar
     }
@@ -343,7 +343,7 @@ class ScheduleService(
         isSummerSeason: Boolean,
         isSpeakAfter: Boolean,
     ): Pair<Schedule, BigSeminar> {
-        val existing = findActiveScheduleInTier(id) { it.isSeminar }
+        val existing = findActiveScheduleInTier(id) { it.isBigSeminar }
         val updated = applyScheduleUpdate(existing, title, location, scheduledAt, endAt, expoint)
         val bigSeminar = upsertBigSeminar(updated.id, isSummerSeason, isSpeakAfter)
         return updated to bigSeminar
@@ -368,12 +368,12 @@ class ScheduleService(
 
         val bigSeminar =
             when {
-                category.isSeminar -> {
-                    val summer = isSummerSeason ?: throw BadRequestException("세미나로 변경하려면 isSummerSeason이 필요합니다.")
-                    val speakAfter = isSpeakAfter ?: throw BadRequestException("세미나로 변경하려면 isSpeakAfter가 필요합니다.")
+                category.isBigSeminar -> {
+                    val summer = isSummerSeason ?: throw BadRequestException("총회로 변경하려면 isSummerSeason이 필요합니다.")
+                    val speakAfter = isSpeakAfter ?: throw BadRequestException("총회로 변경하려면 isSpeakAfter가 필요합니다.")
                     upsertBigSeminar(updated.id, summer, speakAfter)
                 }
-                existing.category.isSeminar -> {
+                existing.category.isBigSeminar -> {
                     bigSeminarRepository.deleteByScheduleId(updated.id)
                     null
                 }
@@ -408,7 +408,7 @@ class ScheduleService(
         requester: Requester,
         id: Long,
     ) {
-        val existing = findActiveScheduleInTier(id) { it.isSeminar }
+        val existing = findActiveScheduleInTier(id) { it.isBigSeminar }
         softDeleteSchedule(existing)
         bigSeminarRepository.deleteByScheduleId(existing.id)
     }

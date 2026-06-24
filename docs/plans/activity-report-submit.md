@@ -59,7 +59,7 @@ POST /groups/:groupId/activity-report
 | ---------------- | --------- | --------------------------------- |
 | `id`             | id        | 생성된 `group_activity_report.id` |
 | `groupId`        | bigint    | 제출한 그룹                       |
-| `seminarId`      | id        | 해당하는 세미나                   |
+| `bigSeminarId`   | id        | 해당하는 총회                     |
 | `isPresentation` | boolean   | 발표 여부                         |
 | `reportFileKey`  | string    | R2 파일 key                       |
 | `created_at`     | timestamp | 생성 일자                         |

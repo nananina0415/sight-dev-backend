@@ -18,8 +18,8 @@ data class GroupActivityReport(
     @Column(name = "group_id", nullable = false)
     val groupId: Long,
 
-    @Column(name = "seminar_id", nullable = false, length = 100)
-    val seminarId: String,
+    @Column(name = "big_seminar_id", nullable = false, length = 100)
+    val bigSeminarId: String,
 
     @Column(name = "report_file_key", nullable = false, length = 255)
     val reportFileKey: String,
