@@ -322,6 +322,69 @@ class ScheduleServiceTest {
     }
 
     @Test
+    fun `createSchedule은 동방 장소에 시간이 겹치는 일정이 있으면 ConflictException을 던진다`() {
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+        given(scheduleRepository.countOverlappingAtLocation(any(), any(), any())).willReturn(1L)
+
+        assertThrows<ConflictException> {
+            scheduleService.createSchedule(
+                requester = requester,
+                title = "test",
+                category = ScheduleCategory.CLUB,
+                location = "405",
+                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                expoint = 0,
+                generateCheckCode = false,
+            )
+        }
+        verify(scheduleRepository, never()).save(any())
+    }
+
+    @Test
+    fun `createSchedule은 동방 장소라도 시간이 겹치지 않으면 정상 등록한다`() {
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+        given(scheduleRepository.countOverlappingAtLocation(any(), any(), any())).willReturn(0L)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+
+        val result =
+            scheduleService.createSchedule(
+                requester = requester,
+                title = "test",
+                category = ScheduleCategory.CLUB,
+                location = "406",
+                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                expoint = 0,
+                generateCheckCode = false,
+            )
+
+        assertEquals("406", result.location)
+        verify(scheduleRepository).save(any<Schedule>())
+    }
+
+    @Test
+    fun `createSchedule은 동방 이외의 장소는 시간이 겹쳐도 등록을 허용한다`() {
+        val requester = Requester(userId = 1L, role = UserRole.MANAGER)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+
+        val result =
+            scheduleService.createSchedule(
+                requester = requester,
+                title = "test",
+                category = ScheduleCategory.CLUB,
+                location = "기타 장소",
+                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+                expoint = 0,
+                generateCheckCode = false,
+            )
+
+        assertEquals("기타 장소", result.location)
+        verify(scheduleRepository, never()).countOverlappingAtLocation(any(), any(), any())
+    }
+
+    @Test
     fun `createGroupActivitySchedule은 그룹 멤버이면 GROUP_ACTIVITY로 expoint 0 checkCode 없이 생성한다`() {
         val requester = Requester(userId = 1L, role = UserRole.USER)
         val group =
@@ -498,6 +561,44 @@ class ScheduleServiceTest {
         val existing = scheduleOf(category = ScheduleCategory.GROUP_ACTIVITY, author = 10L)
         given(scheduleRepository.findActiveById(1L)).willReturn(existing)
         val requester = Requester(userId = 99L, role = UserRole.USER)
+
+        assertThrows<ForbiddenException> {
+            scheduleService.updateGroupActivitySchedule(
+                requester = requester,
+                id = 1L,
+                title = "x",
+                location = null,
+                scheduledAt = LocalDateTime.of(2026, 5, 18, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 18, 16, 0),
+            )
+        }
+    }
+
+    @Test
+    fun `updateGroupActivitySchedule은 MANAGER가 본인 작성 그룹활동을 수정한다`() {
+        val existing = scheduleOf(category = ScheduleCategory.GROUP_ACTIVITY, author = 10L)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+        val requester = Requester(userId = 10L, role = UserRole.MANAGER)
+
+        val result =
+            scheduleService.updateGroupActivitySchedule(
+                requester = requester,
+                id = 1L,
+                title = "new",
+                location = null,
+                scheduledAt = LocalDateTime.of(2026, 5, 20, 14, 0),
+                endAt = LocalDateTime.of(2026, 5, 20, 16, 0),
+            )
+
+        assertEquals("new", result.title)
+    }
+
+    @Test
+    fun `updateGroupActivitySchedule은 MANAGER가 타인 작성 일정을 수정하면 ForbiddenException 던진다`() {
+        val existing = scheduleOf(category = ScheduleCategory.GROUP_ACTIVITY, author = 10L)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        val requester = Requester(userId = 99L, role = UserRole.MANAGER)
 
         assertThrows<ForbiddenException> {
             scheduleService.updateGroupActivitySchedule(
@@ -713,6 +814,20 @@ class ScheduleServiceTest {
         assertThrows<ForbiddenException> {
             scheduleService.deleteGroupActivitySchedule(requester, 1L)
         }
+    }
+
+    @Test
+    fun `deleteGroupActivitySchedule은 MANAGER가 타인 작성 그룹활동을 삭제할 수 있다`() {
+        val existing = scheduleOf(category = ScheduleCategory.GROUP_ACTIVITY, author = 10L)
+        given(scheduleRepository.findActiveById(1L)).willReturn(existing)
+        given(scheduleRepository.save(any<Schedule>())).willAnswer { it.arguments[0] as Schedule }
+        val requester = Requester(userId = 99L, role = UserRole.MANAGER)
+
+        scheduleService.deleteGroupActivitySchedule(requester, 1L)
+
+        val captor = org.mockito.kotlin.argumentCaptor<Schedule>()
+        verify(scheduleRepository).save(captor.capture())
+        assertEquals(ScheduleState.TRASH, captor.firstValue.state)
     }
 
     @Test
