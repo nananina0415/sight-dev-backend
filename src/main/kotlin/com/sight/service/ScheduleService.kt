@@ -313,7 +313,7 @@ class ScheduleService(
         endAt: LocalDateTime,
     ): Schedule {
         val existing = findActiveScheduleInTier(id) { it.isGroupActivity }
-        assertUserIsAuthor(requester, existing)
+        assertIsAuthor(requester, existing)
         return applyScheduleUpdate(existing, title, location, scheduledAt, endAt, existing.expoint)
     }
 
@@ -390,7 +390,7 @@ class ScheduleService(
         id: Long,
     ) {
         val existing = findActiveScheduleInTier(id) { it.isGroupActivity }
-        assertUserIsAuthor(requester, existing)
+        assertIsAuthorOrManager(requester, existing)
         softDeleteSchedule(existing)
     }
 
@@ -499,12 +499,21 @@ class ScheduleService(
         return existing
     }
 
-    private fun assertUserIsAuthor(
+    private fun assertIsAuthor(
+        requester: Requester,
+        existing: Schedule,
+    ) {
+        if (existing.author != requester.userId) {
+            throw ForbiddenException("본인이 작성한 일정만 수정할 수 있습니다.")
+        }
+    }
+
+    private fun assertIsAuthorOrManager(
         requester: Requester,
         existing: Schedule,
     ) {
         if (requester.role == UserRole.USER && existing.author != requester.userId) {
-            throw ForbiddenException("본인이 작성한 일정만 수정·삭제할 수 있습니다.")
+            throw ForbiddenException("본인이 작성한 일정만 삭제할 수 있습니다.")
         }
     }
 
