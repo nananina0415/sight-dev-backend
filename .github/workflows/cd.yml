@@ -49,9 +49,10 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: INTERNAL_API_KEY
+          envs: INTERNAL_API_KEY,DATA4LIBRARY_AUTH_KEY
           script: |
             docker load < /home/github-deploy/sight-dev-backend.tar.gz
-            cd /home/github-deploy && INTERNAL_API_KEY=$INTERNAL_API_KEY docker compose -f docker-compose.dev.yaml up -d
+            cd /home/github-deploy && INTERNAL_API_KEY=$INTERNAL_API_KEY DATA4LIBRARY_AUTH_KEY=$DATA4LIBRARY_AUTH_KEY docker compose -f docker-compose.dev.yaml up -d
         env:
           INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
+          DATA4LIBRARY_AUTH_KEY: ${{ secrets.DATA4LIBRARY_AUTH_KEY }}
